@@ -43,7 +43,7 @@ export default function BudgetsPage() {
               <div key={budget.id} className="p-4 sm:p-6 hover:bg-foreground/5 transition-colors">
                 <div className="flex justify-between items-center mb-2">
                   <h4 className="font-semibold text-lg">{budget.month}</h4>
-                  <span className="font-medium">Limit: ${budget.totalAmount.toFixed(2)}</span>
+                  <span className="font-medium">Limit: ${budget.total_amount.toFixed(2)}</span>
                 </div>
                 {/* Visual indicator (Progress bar) could be added here later */}
                 <div className="w-full bg-border rounded-full h-2.5 mt-4">

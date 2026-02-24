@@ -2,9 +2,17 @@
 
 import { useAiForecast, useAiInsights } from '@/hooks/useAi';
 import { TrendingUp, TrendingDown, AlertCircle, Sparkles, LineChart as LineChartIcon, ShieldAlert } from 'lucide-react';
-import { formatCurrency } from '@/lib/utils';
 import { AiInsightType } from '@/types/ai';
 import { useState } from 'react';
+
+function formatCurrency(amount: number, currency: string = 'USD'): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
 
 export default function AnalyticsPage() {
   const [insightType, setInsightType] = useState<AiInsightType>('monthly');

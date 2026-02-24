@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Bot, X, Send, User } from 'lucide-react';
+import { Bot, X, Send } from 'lucide-react';
 import { useAiChat } from '@/hooks/useAi';
 import { AiChatHistoryItem } from '@/types/ai';
 

@@ -1,17 +1,22 @@
 'use client';
 
 import { Plus, Sparkles, AlertTriangle, ShieldAlert, Info } from 'lucide-react';
-import { useExpenses, useBudgets, useCategories } from '@/hooks/useData';
+import { useExpenses, useBudgets, useCategories, useAddExpense, useAddCategory } from '@/hooks/useData';
 import { useAiNudges } from '@/hooks/useAi';
 import { useMemo, useState } from 'react';
 import { AddExpenseModal } from '@/components/AddExpenseModal';
-
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 export default function DashboardPage() {
   const { expenses, isLoading: expensesLoading } = useExpenses();
   const { budgets, isLoading: budgetsLoading } = useBudgets();
   const { categories, isLoading: categoriesLoading } = useCategories();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const { data: nudgesData, isLoading: nudgesLoading } = useAiNudges();
+  const { trigger: addExpense, isMutating: isAdding } = useAddExpense();
+  const { trigger: addCategory, isMutating: isAddingCat } = useAddCategory();
+  const { user } = useAuth();
+
 
   const isLoading = expensesLoading || budgetsLoading || categoriesLoading;
 
@@ -34,7 +39,7 @@ export default function DashboardPage() {
 
   const remainingBudget = useMemo(() => {
     if (!currentBudget) return 0;
-    return currentBudget.totalAmount - totalSpent;
+    return currentBudget.total_amount - totalSpent;
   }, [currentBudget, totalSpent]);
 
   // Find largest category
@@ -43,7 +48,9 @@ export default function DashboardPage() {
     
     const categoryTotals: Record<string, number> = {};
     currentMonthExpenses.forEach(e => {
-      categoryTotals[e.categoryId] = (categoryTotals[e.categoryId] || 0) + e.amount;
+      // Safe fallback if category_id is undefined
+      const catId = e.category_id || 'unknown';
+      categoryTotals[catId] = (categoryTotals[catId] || 0) + e.amount;
     });
 
     let maxCategoryId = '';
@@ -66,13 +73,17 @@ export default function DashboardPage() {
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-foreground/60">Overview of your recent expenses and budget.</p>
         </div>
-        <button 
-          onClick={() => setIsAddModalOpen(true)}
-          className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity whitespace-nowrap"
-        >
-          <Plus size={18} />
-          New Expense
-        </button>
+        <div className="flex gap-2">
+
+          <button 
+            onClick={() => setIsAddModalOpen(true)}
+            className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity whitespace-nowrap"
+          >
+            <Plus size={18} />
+            New Expense
+
+          </button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -138,7 +149,7 @@ export default function DashboardPage() {
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full text-foreground/50 text-sm">
                     <p>No new nudges right now.</p>
-                    <p className="text-xs mt-1">You're doing great!</p>
+                    <p className="text-xs mt-1">You&apos;re doing great!</p>
                   </div>
                 )}
               </div>
