@@ -2,6 +2,7 @@ import Sidebar from '@/components/Sidebar';
 import MobileNav from '@/components/MobileNav';
 import MobileHeader from '@/components/MobileHeader';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import { AiChatWidget } from '@/components/AiChatWidget';
 
 export default function AppLayout({
   children,
@@ -20,6 +21,7 @@ export default function AppLayout({
             </div>
           </main>
           <MobileNav />
+          <AiChatWidget />
         </div>
       </div>
     </ProtectedRoute>
