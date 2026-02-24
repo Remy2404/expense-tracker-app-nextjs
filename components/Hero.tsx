@@ -21,7 +21,7 @@ export default function Hero() {
           <Smartphone size={20} />
           Get it on Google Play
         </button>
-        <Link href="/login" className="flex items-center justify-center gap-2 border border-foreground/20 px-6 py-3 rounded-full font-semibold hover:bg-foreground/5 transition-colors w-full sm:w-auto">
+        <Link href="/dashboard" className="flex items-center justify-center gap-2 border border-foreground/20 px-6 py-3 rounded-full font-semibold hover:bg-foreground/5 transition-colors w-full sm:w-auto">
           <Monitor size={20} />
           Use Web App
         </Link>
