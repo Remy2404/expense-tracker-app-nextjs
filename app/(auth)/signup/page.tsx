@@ -28,8 +28,8 @@ export default function SignupPage() {
     try {
       await createUserWithEmailAndPassword(auth, email, password);
       router.push('/dashboard');
-    } catch (err: any) {
-      setError(err.message || 'Failed to create an account.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create an account.');
     } finally {
       setLoading(false);
     }
