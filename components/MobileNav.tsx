@@ -1,12 +1,14 @@
 import Link from 'next/link';
-import { Home, Receipt, PieChart, BarChart3 } from 'lucide-react';
+import { Home, Receipt, PieChart, Target, Tags, Bell } from 'lucide-react';
 
 export default function MobileNav() {
   const navItems = [
     { name: 'Home', href: '/dashboard', icon: Home },
     { name: 'Expenses', href: '/expenses', icon: Receipt },
+    { name: 'Categories', href: '/categories', icon: Tags },
     { name: 'Budgets', href: '/budgets', icon: PieChart },
-    { name: 'Analytics', href: '/analytics', icon: BarChart3 },
+    { name: 'Goals', href: '/goals', icon: Target },
+    { name: 'Alerts', href: '/notifications', icon: Bell },
   ];
 
   return (

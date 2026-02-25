@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
-import { Home, Receipt, PieChart, BarChart3, Settings, LogOut, Wallet } from 'lucide-react';
+import { Home, Receipt, PieChart, BarChart3, Settings, LogOut, Wallet, Users, Bell, Tags, Target } from 'lucide-react';
 import { auth } from '@/lib/firebase';
 
 export default function Sidebar() {
@@ -12,8 +12,12 @@ export default function Sidebar() {
   const navItems = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
     { name: 'Expenses', href: '/expenses', icon: Receipt },
+    { name: 'Categories', href: '/categories', icon: Tags },
     { name: 'Budgets', href: '/budgets', icon: PieChart },
+    { name: 'Goals', href: '/goals', icon: Target },
     { name: 'Analytics', href: '/analytics', icon: BarChart3 },
+    { name: 'Notifications', href: '/notifications', icon: Bell },
+    { name: 'Bill Split', href: '/bill-split', icon: Users },
   ];
 
   const handleSignOut = async () => {
