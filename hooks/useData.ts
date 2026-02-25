@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import useSWR from 'swr';
 import useSWRMutation from 'swr/mutation';
 import { useSWRConfig } from 'swr';
@@ -5,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { Expense, Category, Budget } from '@/types';
 import { Goal } from '@/types/goals';
 import { useAuth } from '@/contexts/AuthContext';
+import { MOBILE_DEFAULT_CATEGORIES } from '@/constants/defaultCategories';
 
 // Generic fetcher using Supabase client
 const fetcher = async (table: string) => {
@@ -25,7 +27,50 @@ export function useExpenses() {
 }
 
 export function useCategories() {
+  const { user } = useAuth();
+  const seededRef = useRef<string | null>(null);
+  const inFlightRef = useRef(false);
   const { data, error, isLoading, mutate } = useSWR<Category[]>('categories', fetcher);
+
+  useEffect(() => {
+    if (!user?.uid || isLoading || !data || inFlightRef.current) return;
+
+    const currentKey = `${user.uid}:${data.length}`;
+    if (seededRef.current === currentKey) return;
+
+    const existingNames = new Set(data.map((cat) => cat.name.trim().toLowerCase()));
+    const missingDefaults = MOBILE_DEFAULT_CATEGORIES.filter(
+      (defaultCat) => !existingNames.has(defaultCat.name.trim().toLowerCase())
+    );
+
+    if (missingDefaults.length === 0) {
+      seededRef.current = currentKey;
+      return;
+    }
+
+    inFlightRef.current = true;
+
+    const seedDefaults = async () => {
+      const payload = missingDefaults.map((category) => ({
+        ...category,
+        firebase_uid: user.uid,
+      }));
+
+      const { error: insertError } = await supabase.from('categories').insert(payload);
+
+      inFlightRef.current = false;
+
+      if (insertError) {
+        console.error('Failed seeding default categories', insertError);
+        return;
+      }
+
+      seededRef.current = `${user.uid}:${data.length + missingDefaults.length}`;
+      mutate();
+    };
+
+    seedDefaults();
+  }, [user?.uid, data, isLoading, mutate]);
 
   return {
     categories: data || [],

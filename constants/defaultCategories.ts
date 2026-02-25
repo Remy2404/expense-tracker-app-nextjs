@@ -1,0 +1,41 @@
+import { Category } from '@/types';
+
+export const DEFAULT_CATEGORY_PALETTE = [
+  '#FF6B6B',
+  '#4ECDC4',
+  '#FFD93D',
+  '#95E1D3',
+  '#A78BFA',
+  '#F87171',
+  '#38BDF8',
+  '#FF4D4D',
+  '#FFB6C1',
+  '#A52A2A',
+  '#fbaf24',
+  '#0000FF',
+  '#800080',
+  '#FF0000',
+  '#FFA500',
+  '#008000',
+  '#9CA3AF',
+] as const;
+
+export const MOBILE_DEFAULT_CATEGORIES: Array<Pick<Category, 'name' | 'icon' | 'color'> & { is_default: boolean }> = [
+  { name: 'Food', icon: 'food-apple', color: DEFAULT_CATEGORY_PALETTE[0], is_default: true },
+  { name: 'Transport', icon: 'car', color: DEFAULT_CATEGORY_PALETTE[1], is_default: true },
+  { name: 'Bills', icon: 'flash', color: DEFAULT_CATEGORY_PALETTE[2], is_default: true },
+  { name: 'Shopping', icon: 'shopping', color: DEFAULT_CATEGORY_PALETTE[3], is_default: true },
+  { name: 'Entertainment', icon: 'movie', color: DEFAULT_CATEGORY_PALETTE[4], is_default: true },
+  { name: 'Health', icon: 'medical-bag', color: DEFAULT_CATEGORY_PALETTE[5], is_default: true },
+  { name: 'Housing', icon: 'home-city', color: DEFAULT_CATEGORY_PALETTE[6], is_default: true },
+  { name: 'Subscription', icon: 'youtube-subscription', color: DEFAULT_CATEGORY_PALETTE[7], is_default: true },
+  { name: 'Childcare', icon: 'baby-carriage', color: DEFAULT_CATEGORY_PALETTE[8], is_default: true },
+  { name: 'Pets', icon: 'paw', color: DEFAULT_CATEGORY_PALETTE[9], is_default: true },
+  { name: 'Maintenance', icon: 'tools', color: DEFAULT_CATEGORY_PALETTE[10], is_default: true },
+  { name: 'Electronics', icon: 'laptop', color: DEFAULT_CATEGORY_PALETTE[11], is_default: true },
+  { name: 'Clothing', icon: 'tshirt-crew', color: DEFAULT_CATEGORY_PALETTE[12], is_default: true },
+  { name: 'Fees', icon: 'bank', color: DEFAULT_CATEGORY_PALETTE[13], is_default: true },
+  { name: 'Tax', icon: 'file-document-outline', color: DEFAULT_CATEGORY_PALETTE[14], is_default: true },
+  { name: 'Donation', icon: 'hand-heart', color: DEFAULT_CATEGORY_PALETTE[15], is_default: true },
+  { name: 'Other', icon: 'dots-horizontal', color: DEFAULT_CATEGORY_PALETTE[16], is_default: true },
+];
