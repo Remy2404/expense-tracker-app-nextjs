@@ -57,9 +57,12 @@ export default function BillSplitPage() {
       });
       reset();
       setOpen(false);
-    } catch (createError) {
-      console.error(createError);
-      alert('Failed to create group. Please verify the bill split database tables exist.');
+    } catch (createError: unknown) {
+      console.error('Create group error:', createError);
+      const errorMessage = createError && typeof createError === 'object' && 'message' in createError
+        ? String((createError as { message: unknown }).message)
+        : 'Unknown error';
+      alert(`Failed to create group: ${errorMessage}. Please check console for details.`);
     }
   };
 

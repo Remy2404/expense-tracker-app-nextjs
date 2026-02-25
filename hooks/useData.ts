@@ -390,8 +390,7 @@ export function useAddGoalTransaction() {
     'goal_transactions',
     async (_key, { arg }: { arg: Omit<GoalTransaction, 'id'> }) => {
       if (!user?.uid) throw new Error('User not authenticated');
-      const payload = { ...arg, firebase_uid: user.uid };
-      const { data, error } = await supabase.from('goal_transactions').insert(payload).select().single();
+      const { data, error } = await supabase.from('goal_transactions').insert(arg).select().single();
       if (error) throw error;
       return data;
     },

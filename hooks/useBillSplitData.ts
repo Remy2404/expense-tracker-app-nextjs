@@ -41,7 +41,7 @@ export function useBillSplitGroups() {
     if (!user?.uid) return [];
 
     const [{ data: groups, error: groupError }, { data: participants, error: participantError }, { data: expenses, error: expenseError }, { data: shares, error: shareError }] = await Promise.all([
-      supabase.from('bill_split_groups').select('*').eq('created_by', user.uid).neq('is_deleted', true).order('created_at', { ascending: false }),
+      supabase.from('bill_split_groups').select('*').eq('created_by', user.uid).eq('is_deleted', false).order('created_at', { ascending: false }),
       supabase.from('bill_split_participants').select('*'),
       supabase.from('bill_split_expenses').select('*').order('date', { ascending: false }),
       supabase.from('bill_split_shares').select('*'),

@@ -30,6 +30,7 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
   const [naturalLanguage, setNaturalLanguage] = useState('');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [parsedData, setParsedData] = useState<any>(null);
+  const [aiParseError, setAiParseError] = useState(false);
   const [selectedCurrency, setSelectedCurrency] = useState('USD');
   
   const { categories } = useCategories();
@@ -81,12 +82,21 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
       const result = await parseAi({ raw_text: naturalLanguage, source: 'text' });
       setParsedData(result);
       if (result.amount) setValue('amount', result.amount);
-      if (result.note || result.merchant) setValue('note', result.note || result.merchant || '');
+      // Use noteSummary if available, otherwise fallback to note or merchant
+      const noteValue = result.note_summary || result.note || result.merchant || '';
+      if (noteValue) setValue('note', noteValue);
       if (result.date) setValue('date', new Date(result.date).toISOString().split('T')[0]);
       if (result.suggested_category_id) setValue('category_id', result.suggested_category_id);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('AI Parse Error:', error);
-      alert('Failed to parse with AI. You can enter details manually.');
+      // Try to extract a meaningful message from the error
+      const errorMessage = error && typeof error === 'object' && 'message' in error
+        ? String((error as { message: unknown }).message)
+        : 'Failed to parse expense. Please enter details manually.';
+      console.error('AI Parse Error Details:', errorMessage);
+      // When AI fails, switch to manual mode by setting parsedData to empty object
+      setParsedData({});
+      setAiParseError(true);
     }
   };
 
@@ -117,6 +127,7 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
   const handleClose = () => {
     setNaturalLanguage('');
     setParsedData(null);
+    setAiParseError(false);
     setSelectedCurrency('USD');
     reset({
       amount: undefined,
@@ -181,6 +192,11 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
                 <div className="bg-green-500/10 border border-green-500/20 text-green-600 rounded-lg p-3 text-sm flex items-center gap-2 mb-4">
                   <Sparkles size={16} />
                   Successfully parsed expense details!
+                </div>
+              )}
+              {aiParseError && (
+                <div className="bg-red-500/10 border border-red-500/20 text-red-600 rounded-lg p-3 text-sm flex items-center gap-2 mb-4">
+                  AI parsing failed. Please enter details manually.
                 </div>
               )}
 

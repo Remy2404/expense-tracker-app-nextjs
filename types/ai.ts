@@ -14,6 +14,7 @@ export interface AiParseResponse {
   merchant: string | null;
   date: string | null;
   note: string | null;
+  note_summary: string | null;
   suggested_category_id: string | null;
   confidence: number;
   source: AiModelSource;
@@ -81,7 +82,9 @@ export type AiChatIntent = 'none' | 'add_expense' | 'query_expenses';
 export interface AiChatActionPayload {
   amount: number | null;
   category: string | null;
+  categoryId: string | null;
   note: string | null;
+  noteSummary: string | null;
   date: string | null;
   merchant: string | null;
 }

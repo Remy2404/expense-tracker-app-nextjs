@@ -172,7 +172,9 @@ const validateChat = (data: unknown): AiChatResponse => {
     const actionPayload = assertObject(rawPayload, '/api/ai/chat');
     assertNullableNumber(actionPayload, 'amount', '/api/ai/chat');
     assertNullableString(actionPayload, 'category', '/api/ai/chat');
+    assertOptionalNullableString(actionPayload, 'categoryId', '/api/ai/chat');
     assertNullableString(actionPayload, 'note', '/api/ai/chat');
+    assertOptionalNullableString(actionPayload, 'note_summary', '/api/ai/chat');
     assertNullableString(actionPayload, 'date', '/api/ai/chat');
     assertOptionalNullableString(actionPayload, 'merchant', '/api/ai/chat');
   }

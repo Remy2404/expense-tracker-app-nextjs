@@ -2,10 +2,48 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Plus, Target, Edit2, Trash2, Loader2 } from 'lucide-react';
+import {
+  Plus, Target, Edit2, Trash2, Loader2, Plane, Car, Home, GraduationCap,
+  Heart, ShoppingBag, Laptop, Gamepad2, Gift, PiggyBank, Wallet, Briefcase,
+  Dumbbell, Music, Camera, Book, Coffee, Utensils, Baby, PawPrint, Sparkles,
+  Sun, Moon, Star, Zap, Trophy, Flag, Compass
+} from 'lucide-react';
 import { Goal } from '@/types/goals';
 import { GoalModal } from '@/components/GoalModal';
 import { useAddGoal, useDeleteGoal, useEditGoal, useGoals } from '@/hooks/useData';
+
+// Icon map for displaying goal icons
+const ICON_MAP: Record<string, React.ComponentType<{ size?: number; className?: string; style?: React.CSSProperties }>> = {
+  target: Target,
+  plane: Plane,
+  car: Car,
+  home: Home,
+  graduation: GraduationCap,
+  heart: Heart,
+  shopping: ShoppingBag,
+  laptop: Laptop,
+  game: Gamepad2,
+  gift: Gift,
+  piggybank: PiggyBank,
+  wallet: Wallet,
+  briefcase: Briefcase,
+  dumbbell: Dumbbell,
+  music: Music,
+  camera: Camera,
+  book: Book,
+  coffee: Coffee,
+  food: Utensils,
+  baby: Baby,
+  pet: PawPrint,
+  sparkles: Sparkles,
+  sun: Sun,
+  moon: Moon,
+  star: Star,
+  zap: Zap,
+  trophy: Trophy,
+  flag: Flag,
+  compass: Compass,
+};
 
 function formatMoney(value: number) {
   return `$${value.toFixed(2)}`;
@@ -128,21 +166,29 @@ export default function GoalsPage() {
               const progress = goal.target_amount > 0
                 ? Math.min((goal.current_amount / goal.target_amount) * 100, 100)
                 : 0;
+              const IconComponent = ICON_MAP[goal.icon] || Target;
 
               return (
                 <Link key={goal.id} href={`/goals/${goal.id}`} className="block p-4 sm:p-6 hover:bg-foreground/5 transition-colors group">
                   <div className="flex justify-between items-start gap-4 mb-3">
-                    <div>
-                      <h4 className="font-semibold text-lg flex items-center gap-2">
-                        <span className="w-3 h-3 rounded-full" style={{ backgroundColor: goal.color }} />
-                        {goal.name}
-                        {goal.is_archived && (
-                          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-foreground/10 text-foreground/70">Archived</span>
-                        )}
-                      </h4>
-                      <p className="text-sm text-foreground/60 mt-1">
-                        Deadline: {new Date(goal.deadline).toLocaleDateString()}
-                      </p>
+                    <div className="flex items-start gap-3">
+                      <div
+                        className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: goal.color + '20' }}
+                      >
+                        <IconComponent size={20} style={{ color: goal.color }} />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-lg flex items-center gap-2">
+                          {goal.name}
+                          {goal.is_archived && (
+                            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-foreground/10 text-foreground/70">Archived</span>
+                          )}
+                        </h4>
+                        <p className="text-sm text-foreground/60 mt-1">
+                          Deadline: {new Date(goal.deadline).toLocaleDateString()}
+                        </p>
+                      </div>
                     </div>
 
                     <div className="text-right">
