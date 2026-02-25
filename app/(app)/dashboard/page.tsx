@@ -73,6 +73,17 @@ export default function DashboardPage() {
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-foreground/60">Overview of your recent expenses and budget.</p>
         </div>
+        <div className="flex items-center gap-3 px-4 py-2 bg-card border border-border rounded-lg">
+          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+            <span className="text-sm font-medium text-primary">
+              {user?.email?.charAt(0).toUpperCase() || '?'}
+            </span>
+          </div>
+          <div className="text-sm">
+            <p className="font-medium truncate max-w-[200px]">{user?.displayName || user?.email || 'User'}</p>
+            <p className="text-foreground/50 text-xs truncate max-w-[200px]">{user?.email || 'No email'}</p>
+          </div>
+        </div>
         <div className="flex gap-2">
 
           <button 

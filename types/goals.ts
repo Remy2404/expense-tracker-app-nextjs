@@ -16,3 +16,12 @@ export interface Goal {
   created_at?: string;
   updated_at?: string;
 }
+
+export interface GoalTransaction {
+  id: string;
+  goal_id: string;
+  amount: number;
+  date: string;
+  type: 'deposit' | 'withdraw';
+  note?: string;
+}

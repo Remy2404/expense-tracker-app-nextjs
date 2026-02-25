@@ -5,9 +5,11 @@ import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { Wallet, LogOut } from 'lucide-react';
 import { NotificationsBell } from '@/components/NotificationsBell';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function MobileHeader() {
   const router = useRouter();
+  const { user } = useAuth();
 
   const handleSignOut = async () => {
     try {
@@ -24,9 +26,14 @@ export default function MobileHeader() {
         <Wallet className="h-5 w-5 text-primary" />
         <span className="font-bold text-lg tracking-tight">ExpenseVault</span>
       </div>
-      <div className="flex items-center gap-3 text-foreground/70">
+      <div className="flex items-center gap-2">
+        <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center">
+          <span className="text-xs font-medium text-primary">
+            {user?.email?.charAt(0).toUpperCase() || '?'}
+          </span>
+        </div>
         <NotificationsBell />
-        <button 
+        <button
           onClick={handleSignOut}
           className="hover:text-destructive transition-colors"
           aria-label="Sign Out"

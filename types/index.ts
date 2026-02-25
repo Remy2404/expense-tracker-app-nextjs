@@ -66,3 +66,29 @@ export interface AiParseResponse {
   confidence: number;
   suggestedCategories?: { id: string; name: string; probability: number }[];
 }
+
+export type RecurringFrequency = 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'yearly';
+
+export interface RecurringExpense {
+  id: string;
+  amount: number;
+  category_id: string;
+  notes?: string;
+  frequency: RecurringFrequency;
+  currency?: string;
+  original_amount?: number;
+  exchange_rate?: number;
+  start_date: Date | string;
+  end_date?: Date | string;
+  last_generated?: Date | string;
+  next_due_date: Date | string;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+  notification_enabled: boolean;
+  notification_days_before: number;
+  sync_status?: 'pending' | 'synced';
+  synced_at?: string;
+  is_deleted?: boolean;
+  deleted_at?: string;
+}

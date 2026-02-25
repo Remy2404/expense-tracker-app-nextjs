@@ -19,11 +19,39 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
 
+    if (!email.trim() || !password.trim()) {
+      setError('Please enter both email and password.');
+      setLoading(false);
+      return;
+    }
+
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      console.log('Login successful, user:', user.email, user.uid);
+
+      // Check if email is available
+      if (!user.email) {
+        setError('Login succeeded but email is not available. Please contact support.');
+        return;
+      }
+
       router.push('/dashboard');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to sign in. Please check your credentials.');
+    } catch (err: any) {
+      console.error('Login error:', err);
+      // Provide more helpful error messages
+      if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
+        setError('Invalid email or password. Please try again.');
+      } else if (err.code === 'auth/user-disabled') {
+        setError('This account has been disabled. Please contact support.');
+      } else if (err.code === 'auth/too-many-requests') {
+        setError('Too many failed attempts. Please try again later or reset your password.');
+      } else if (err.code === 'auth.operation-not-allowed') {
+        setError('Email/Password sign-in is not enabled. Please enable it in Firebase Console > Authentication.');
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to sign in. Please check your credentials.');
+      }
     } finally {
       setLoading(false);
     }

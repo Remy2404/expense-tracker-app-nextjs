@@ -19,17 +19,47 @@ export default function SignupPage() {
     e.preventDefault();
     setError('');
 
+    if (!email.trim() || !password.trim() || !confirmPassword.trim()) {
+      return setError('Please fill in all fields.');
+    }
+
     if (password !== confirmPassword) {
       return setError('Passwords do not match');
+    }
+
+    if (password.length < 6) {
+      return setError('Password must be at least 6 characters.');
     }
 
     setLoading(true);
 
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      console.log('Signup successful, user:', user.email, user.uid);
+
+      // Check if email is available
+      if (!user.email) {
+        setError('Account created but email is not available. Please contact support.');
+        return;
+      }
+
       router.push('/dashboard');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create an account.');
+    } catch (err: any) {
+      console.error('Signup error:', err);
+      // Provide more helpful error messages
+      if (err.code === 'auth/email-already-in-use') {
+        setError('This email is already registered. Please sign in instead.');
+      } else if (err.code === 'auth/invalid-email') {
+        setError('Invalid email address. Please check and try again.');
+      } else if (err.code === 'auth/weak-password') {
+        setError('Password is too weak. Please use a stronger password.');
+      } else if (err.code === 'auth/operation-not-allowed') {
+        setError('Email/Password sign-up is not enabled. Please enable it in Firebase Console.');
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to create an account.');
+      }
     } finally {
       setLoading(false);
     }

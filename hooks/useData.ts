@@ -3,8 +3,8 @@ import useSWR from 'swr';
 import useSWRMutation from 'swr/mutation';
 import { useSWRConfig } from 'swr';
 import { supabase } from '@/lib/supabase';
-import { Expense, Category, Budget } from '@/types';
-import { Goal } from '@/types/goals';
+import { Expense, Category, Budget, RecurringExpense } from '@/types';
+import { Goal, GoalTransaction } from '@/types/goals';
 import { useAuth } from '@/contexts/AuthContext';
 import { MOBILE_DEFAULT_CATEGORIES } from '@/constants/defaultCategories';
 
@@ -32,50 +32,101 @@ export function useCategories() {
   const inFlightRef = useRef(false);
   const { data, error, isLoading, mutate } = useSWR<Category[]>('categories', fetcher);
 
-  useEffect(() => {
-    if (!user?.uid || isLoading || !data || inFlightRef.current) return;
+  // Helper to ensure profile exists before seeding
+  const ensureProfileExists = async (firebaseUid: string) => {
+    // Check if profile exists
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('firebase_uid')
+      .eq('firebase_uid', firebaseUid)
+      .single();
 
+    if (existingProfile) return true;
+
+    // Create profile if it doesn't exist
+    const { error: insertError } = await supabase.from('profiles').insert({
+      firebase_uid: firebaseUid,
+    });
+
+    if (insertError) {
+      console.warn('Failed to create profile:', insertError.message);
+      return false;
+    }
+
+    return true;
+  };
+
+  useEffect(() => {
+    // Don't run if: no user, still loading, no data, or already processing
+    if (!user?.uid || isLoading || !data) return;
+
+    // Skip if already seeded for this user+count combination
     const currentKey = `${user.uid}:${data.length}`;
     if (seededRef.current === currentKey) return;
 
+    // Skip if currently inserting
+    if (inFlightRef.current) return;
+
+    // Get existing category names (case-insensitive)
     const existingNames = new Set(data.map((cat) => cat.name.trim().toLowerCase()));
+
+    // Find missing default categories
     const missingDefaults = MOBILE_DEFAULT_CATEGORIES.filter(
       (defaultCat) => !existingNames.has(defaultCat.name.trim().toLowerCase())
     );
 
+    // If all defaults exist, mark as seeded and return
     if (missingDefaults.length === 0) {
       seededRef.current = currentKey;
       return;
     }
 
+    // Mark as in-flight to prevent duplicate calls
     inFlightRef.current = true;
 
     const seedDefaults = async () => {
-      const payload = missingDefaults.map((category) => ({
-        ...category,
-        firebase_uid: user.uid,
-      }));
+      try {
+        // First ensure profile exists (required for foreign key)
+        const profileReady = await ensureProfileExists(user.uid);
+        if (!profileReady) {
+          console.warn('Profile not ready, skipping category seeding');
+          inFlightRef.current = false;
+          seededRef.current = currentKey;
+          return;
+        }
 
-      const { error: insertError } = await supabase.from('categories').insert(payload);
+        // Prepare payload with firebase_uid
+        const payload = missingDefaults.map((category) => ({
+          ...category,
+          firebase_uid: user.uid,
+        }));
 
-      if (insertError) {
-        // Fallback: insert one-by-one so partial success is possible under stricter DB/RLS constraints
-        for (const category of payload) {
-          const { error: singleInsertError } = await supabase.from('categories').insert(category);
-          if (singleInsertError) {
-            console.warn('Skip default category seed', {
-              name: category.name,
-              message: singleInsertError.message,
-              code: singleInsertError.code,
-              details: singleInsertError.details,
-            });
+        // Try bulk insert first
+        const { error: insertError } = await supabase.from('categories').insert(payload);
+
+        if (insertError) {
+          console.warn('Bulk insert failed, trying one-by-one:', insertError.message);
+          // Fallback: insert one-by-one so partial success is possible under stricter DB/RLS constraints
+          for (const category of payload) {
+            const { error: singleInsertError } = await supabase.from('categories').insert(category);
+            if (singleInsertError) {
+              console.warn('Skip default category seed', {
+                name: category.name,
+                message: singleInsertError.message,
+                code: singleInsertError.code,
+              });
+            }
           }
         }
-      }
 
-      inFlightRef.current = false;
-      seededRef.current = currentKey;
-      mutate();
+        // Update the cache to reflect the new categories
+        mutate();
+      } catch (err) {
+        console.error('Error seeding default categories:', err);
+      } finally {
+        inFlightRef.current = false;
+        seededRef.current = currentKey;
+      }
     };
 
     seedDefaults();
@@ -98,6 +149,69 @@ export function useBudgets() {
     isError: error,
     mutate,
   };
+}
+
+export function useAddBudget() {
+  const { mutate } = useSWRConfig();
+  const { user } = useAuth();
+  return useSWRMutation(
+    'budgets',
+    async (_key, { arg }: { arg: Omit<Budget, 'id' | 'created_at' | 'updated_at' | 'sync_status' | 'synced_at' | 'is_deleted'> }) => {
+      if (!user?.uid) throw new Error('User not authenticated');
+      const payload = { ...arg, firebase_uid: user.uid };
+      const { data, error } = await supabase.from('budgets').insert(payload).select().single();
+      if (error) throw error;
+      return data;
+    },
+    {
+      onSuccess: () => {
+        mutate('budgets');
+      },
+    }
+  );
+}
+
+export function useEditBudget() {
+  const { mutate } = useSWRConfig();
+  return useSWRMutation(
+    'budgets',
+    async (_key, { arg }: { arg: { id: string } & Partial<Omit<Budget, 'id' | 'created_at' | 'updated_at'>> }) => {
+      const { id, ...updates } = arg;
+      const { data, error } = await supabase
+        .from('budgets')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    {
+      onSuccess: () => {
+        mutate('budgets');
+      },
+    }
+  );
+}
+
+export function useDeleteBudget() {
+  const { mutate } = useSWRConfig();
+  return useSWRMutation(
+    'budgets',
+    async (_key, { arg }: { arg: { id: string } }) => {
+      const { error } = await supabase
+        .from('budgets')
+        .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+        .eq('id', arg.id);
+      if (error) throw error;
+      return true;
+    },
+    {
+      onSuccess: () => {
+        mutate('budgets');
+      },
+    }
+  );
 }
 
 export function useGoals() {
@@ -269,6 +383,47 @@ export function useDeleteGoal() {
   );
 }
 
+export function useAddGoalTransaction() {
+  const { mutate } = useSWRConfig();
+  const { user } = useAuth();
+  return useSWRMutation(
+    'goal_transactions',
+    async (_key, { arg }: { arg: Omit<GoalTransaction, 'id'> }) => {
+      if (!user?.uid) throw new Error('User not authenticated');
+      const payload = { ...arg, firebase_uid: user.uid };
+      const { data, error } = await supabase.from('goal_transactions').insert(payload).select().single();
+      if (error) throw error;
+      return data;
+    },
+    {
+      onSuccess: () => {
+        mutate('savings_goals');
+      },
+    }
+  );
+}
+
+export function useUpdateGoalBalance() {
+  const { mutate } = useSWRConfig();
+  return useSWRMutation(
+    'savings_goals',
+    async (_key, { arg }: { arg: { id: string; current_amount: number } }) => {
+      const { id, current_amount } = arg;
+      const { error } = await supabase
+        .from('savings_goals')
+        .update({ current_amount, updated_at: new Date().toISOString() })
+        .eq('id', id);
+      if (error) throw error;
+      return true;
+    },
+    {
+      onSuccess: () => {
+        mutate('savings_goals');
+      },
+    }
+  );
+}
+
 export function useAddExpense() {
   const { mutate } = useSWRConfig();
   const { user } = useAuth();
@@ -322,6 +477,104 @@ export function useDeleteExpense() {
     {
       onSuccess: () => {
         mutate('expenses');
+      },
+    }
+  );
+}
+
+// Recurring Expenses Hooks
+export function useRecurringExpenses() {
+  const { data, error, isLoading, mutate } = useSWR<RecurringExpense[]>(
+    'recurring_expenses',
+    fetcher
+  );
+
+  return {
+    recurringExpenses: data || [],
+    isLoading,
+    isError: error,
+    mutate,
+  };
+}
+
+export function useAddRecurringExpense() {
+  const { mutate } = useSWRConfig();
+  const { user } = useAuth();
+  return useSWRMutation(
+    'recurring_expenses',
+    async (_key, { arg }: { arg: Omit<RecurringExpense, 'id' | 'created_at' | 'updated_at' | 'sync_status' | 'synced_at' | 'is_deleted'> }) => {
+      if (!user?.uid) throw new Error('User not authenticated');
+      const payload = { ...arg, firebase_uid: user.uid };
+      const { data, error } = await supabase.from('recurring_expenses').insert(payload).select().single();
+      if (error) throw error;
+      return data;
+    },
+    {
+      onSuccess: () => {
+        mutate('recurring_expenses');
+      },
+    }
+  );
+}
+
+export function useEditRecurringExpense() {
+  const { mutate } = useSWRConfig();
+  return useSWRMutation(
+    'recurring_expenses',
+    async (_key, { arg }: { arg: { id: string } & Partial<Omit<RecurringExpense, 'id' | 'created_at' | 'updated_at'>> }) => {
+      const { id, ...updates } = arg;
+      const { data, error } = await supabase
+        .from('recurring_expenses')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    {
+      onSuccess: () => {
+        mutate('recurring_expenses');
+      },
+    }
+  );
+}
+
+export function useDeleteRecurringExpense() {
+  const { mutate } = useSWRConfig();
+  return useSWRMutation(
+    'recurring_expenses',
+    async (_key, { arg }: { arg: { id: string } }) => {
+      const { error } = await supabase
+        .from('recurring_expenses')
+        .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+        .eq('id', arg.id);
+      if (error) throw error;
+      return true;
+    },
+    {
+      onSuccess: () => {
+        mutate('recurring_expenses');
+      },
+    }
+  );
+}
+
+export function useToggleRecurringExpense() {
+  const { mutate } = useSWRConfig();
+  return useSWRMutation(
+    'recurring_expenses',
+    async (_key, { arg }: { arg: { id: string; isActive: boolean } }) => {
+      const { error } = await supabase
+        .from('recurring_expenses')
+        .update({ is_active: arg.isActive, updated_at: new Date().toISOString() })
+        .eq('id', arg.id);
+      if (error) throw error;
+      return true;
+    },
+    {
+      onSuccess: () => {
+        mutate('recurring_expenses');
       },
     }
   );

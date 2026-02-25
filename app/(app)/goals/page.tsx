@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { Plus, Target, Edit2, Trash2, Loader2 } from 'lucide-react';
 import { Goal } from '@/types/goals';
 import { GoalModal } from '@/components/GoalModal';
@@ -129,7 +130,7 @@ export default function GoalsPage() {
                 : 0;
 
               return (
-                <div key={goal.id} className="p-4 sm:p-6 hover:bg-foreground/5 transition-colors group">
+                <Link key={goal.id} href={`/goals/${goal.id}`} className="block p-4 sm:p-6 hover:bg-foreground/5 transition-colors group">
                   <div className="flex justify-between items-start gap-4 mb-3">
                     <div>
                       <h4 className="font-semibold text-lg flex items-center gap-2">
@@ -174,7 +175,7 @@ export default function GoalsPage() {
                       {deletingId === goal.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
                     </button>
                   </div>
-                </div>
+                </Link>
               );
             })}
           </div>
