@@ -7,7 +7,7 @@ import { Plus, Target, Edit2, Trash2, Loader2, ArrowLeft, TrendingUp, TrendingDo
 import { Goal } from '@/types/goals';
 import { GoalModal } from '@/components/GoalModal';
 import { GoalTransactionModal } from '@/components/GoalTransactionModal';
-import { useGoals, useDeleteGoal, useEditGoal, useUpdateGoalBalance } from '@/hooks/useData';
+import { useGoals, useDeleteGoal, useEditGoal, useUpdateGoalBalance, useGoalTransactions, useAddGoalTransaction } from '@/hooks/useData';
 import { currencyFormat } from '@/lib/billSplit';
 import { format, isBefore, startOfDay } from 'date-fns';
 
@@ -19,6 +19,8 @@ export default function GoalDetailPage() {
   const { trigger: deleteGoal, isMutating: isDeleting } = useDeleteGoal();
   const { trigger: editGoal, isMutating: isEditing } = useEditGoal();
   const { trigger: updateBalance, isMutating: isUpdating } = useUpdateGoalBalance();
+  const { trigger: addTransaction, isMutating: isAddingTransaction } = useAddGoalTransaction();
+  const { transactions, isLoading: isLoadingTransactions } = useGoalTransactions(goalId);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
@@ -26,7 +28,7 @@ export default function GoalDetailPage() {
 
   const goal = useMemo(() => goals.find(g => g.id === goalId), [goals, goalId]);
 
-  const isSaving = isEditing || isUpdating;
+  const isSaving = isEditing || isUpdating || isAddingTransaction;
 
   const progress = useMemo(() => {
     if (!goal || goal.target_amount <= 0) return 0;
@@ -67,6 +69,15 @@ export default function GoalDetailPage() {
       } else {
         newAmount = Math.max(0, newAmount - amount);
       }
+
+      // Save the transaction record to database
+      await addTransaction({
+        goal_id: goalId,
+        amount,
+        type,
+        date: new Date().toISOString(),
+        note,
+      });
 
       // Update goal balance
       await updateBalance({
@@ -230,12 +241,46 @@ export default function GoalDetailPage() {
         </button>
       </div>
 
-      {/* Recent Activity placeholder - would need transaction history */}
+      {/* Recent Activity */}
       <div className="bg-card border border-border rounded-xl p-6">
         <h3 className="font-semibold mb-4">Recent Activity</h3>
-        <p className="text-foreground/60 text-center py-4">
-          Transaction history will appear here.
-        </p>
+        {isLoadingTransactions ? (
+          <div className="flex justify-center py-4">
+            <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-primary"></div>
+          </div>
+        ) : transactions.length === 0 ? (
+          <p className="text-foreground/60 text-center py-4">
+            No transactions yet. Add or withdraw money to see activity.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {transactions.slice(0, 10).map((tx) => (
+              <div key={tx.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                    tx.type === 'deposit' ? 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-400' : 'bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-400'
+                  }`}>
+                    {tx.type === 'deposit' ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+                  </div>
+                  <div>
+                    <p className="font-medium capitalize">{tx.type}</p>
+                    <p className="text-sm text-foreground/60">
+                      {tx.note || (tx.type === 'deposit' ? 'Deposit' : 'Withdrawal')}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className={`font-semibold ${tx.type === 'deposit' ? 'text-green-600' : 'text-amber-600'}`}>
+                    {tx.type === 'deposit' ? '+' : '-'}{currencyFormat(tx.amount, 'USD')}
+                  </p>
+                  <p className="text-sm text-foreground/60">
+                    {format(new Date(tx.date), 'MMM d, yyyy')}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <GoalModal
@@ -250,7 +295,7 @@ export default function GoalDetailPage() {
         isOpen={isTransactionModalOpen}
         onClose={() => setIsTransactionModalOpen(false)}
         onSubmit={handleTransaction}
-        isSaving={isUpdating}
+        isSaving={isSaving}
         currentBalance={goal.current_amount}
       />
     </div>

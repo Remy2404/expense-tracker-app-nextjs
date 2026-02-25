@@ -7,6 +7,7 @@ import { useMemo, useState } from 'react';
 import { AddExpenseModal } from '@/components/AddExpenseModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { getCurrencySymbol } from '@/lib/currencies';
 export default function DashboardPage() {
   const { expenses, isLoading: expensesLoading } = useExpenses();
   const { budgets, isLoading: budgetsLoading } = useBudgets();
@@ -106,12 +107,12 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-card text-card-foreground border border-border p-6 rounded-xl shadow-sm">
               <h3 className="font-medium text-foreground/60 mb-2">Total Spent (This Month)</h3>
-              <p className="text-3xl font-bold">${totalSpent.toFixed(2)}</p>
+              <p className="text-3xl font-bold">{getCurrencySymbol('USD')}{totalSpent.toFixed(2)}</p>
             </div>
             <div className="bg-card text-card-foreground border border-border p-6 rounded-xl shadow-sm">
               <h3 className="font-medium text-foreground/60 mb-2">Remaining Budget</h3>
               <p className={`text-3xl font-bold ${remainingBudget < 0 ? 'text-danger' : 'text-success'}`}>
-                ${remainingBudget.toFixed(2)}
+                {getCurrencySymbol('USD')}{remainingBudget.toFixed(2)}
               </p>
             </div>
             <div className="bg-card text-card-foreground border border-border p-6 rounded-xl shadow-sm">
@@ -128,7 +129,7 @@ export default function DashboardPage() {
                   {expenses.slice(0, 5).map(exp => (
                     <div key={exp.id} className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">
                       <span className="truncate max-w-[150px]">{exp.notes || 'Expense'}</span>
-                      <span className="font-medium">${exp.amount.toFixed(2)}</span>
+                      <span className="font-medium">{getCurrencySymbol(exp.currency || 'USD')}{exp.amount.toFixed(2)}</span>
                     </div>
                   ))}
                   {expenses.length === 0 && <p className="text-sm text-center text-foreground/50">No recent transactions</p>}

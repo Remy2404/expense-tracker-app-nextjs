@@ -1,4 +1,5 @@
 import { Category, Expense } from '@/types';
+import { getCurrencySymbol } from './currencies';
 
 const csvEscape = (value: string | number | null | undefined): string => {
   if (value === null || value === undefined) return '';
@@ -44,6 +45,7 @@ export const downloadFile = (content: string, filename: string, mimeType: string
 
 export const exportExpensesAsPdf = (expenses: Expense[], categories: Category[]) => {
   const total = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+  const currencySymbol = getCurrencySymbol('USD');
   const rows = expenses
     .map((expense) => {
       const date = new Date(expense.date).toLocaleDateString();
@@ -55,7 +57,7 @@ export const exportExpensesAsPdf = (expenses: Expense[], categories: Category[])
         <td>${category}</td>
         <td>${expense.merchant || '-'}</td>
         <td>${notes}</td>
-        <td style="text-align:right">$${expense.amount.toFixed(2)}</td>
+        <td style="text-align:right">${getCurrencySymbol(expense.currency || 'USD')}${expense.amount.toFixed(2)}</td>
       </tr>`;
     })
     .join('');
@@ -90,7 +92,7 @@ export const exportExpensesAsPdf = (expenses: Expense[], categories: Category[])
     </thead>
     <tbody>${rows}</tbody>
   </table>
-  <div class="summary">Total: $${total.toFixed(2)}</div>
+  <div class="summary">Total: ${currencySymbol}${total.toFixed(2)}</div>
 </body>
 </html>`);
   printWindow.document.close();

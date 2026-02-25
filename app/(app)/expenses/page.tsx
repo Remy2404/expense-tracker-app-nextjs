@@ -6,6 +6,7 @@ import { useExpenses, useCategories, useDeleteExpense } from '@/hooks/useData';
 import { AddExpenseModal } from '@/components/AddExpenseModal';
 import { Expense } from '@/types';
 import { buildExpenseCsv, downloadFile, exportExpensesAsPdf } from '@/lib/export';
+import { getCurrencySymbol } from '@/lib/currencies';
 
 type ExportRange = 'all' | 'current-month';
 
@@ -196,7 +197,7 @@ export default function ExpensesPage() {
                   </div>
                 </div>
                 <div className="text-right flex items-center justify-end gap-2 sm:gap-4">
-                  <p className="font-semibold text-lg">${expense.amount.toFixed(2)}</p>
+                  <p className="font-semibold text-lg">{getCurrencySymbol(expense.currency || 'USD')}{expense.amount.toFixed(2)}</p>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={() => handleEdit(expense)}

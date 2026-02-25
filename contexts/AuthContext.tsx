@@ -8,11 +8,13 @@ import { supabase } from '@/lib/supabase';
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
+  isLoading: true,
 });
 
 // Helper to create/update profile in Supabase with user info
@@ -69,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading }}>
+    <AuthContext.Provider value={{ user, loading, isLoading: loading }}>
       {children}
     </AuthContext.Provider>
   );

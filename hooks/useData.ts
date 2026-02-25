@@ -424,6 +424,31 @@ export function useUpdateGoalBalance() {
   );
 }
 
+export function useGoalTransactions(goalId?: string) {
+  const fetcherByGoal = async () => {
+    if (!goalId) return [];
+    const { data, error } = await supabase
+      .from('goal_transactions')
+      .select('*')
+      .eq('goal_id', goalId)
+      .order('date', { ascending: false });
+    if (error) throw error;
+    return data as GoalTransaction[];
+  };
+
+  const { data, error, isLoading, mutate } = useSWR(
+    goalId ? ['goal_transactions', goalId] : null,
+    fetcherByGoal
+  );
+
+  return {
+    transactions: data || [],
+    isLoading,
+    isError: error,
+    mutate,
+  };
+}
+
 export function useAddExpense() {
   const { mutate } = useSWRConfig();
   const { user } = useAuth();

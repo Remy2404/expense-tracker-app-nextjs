@@ -8,9 +8,11 @@ import { Expense } from '@/types';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
+import { CURRENCIES, getCurrencySymbol } from '@/lib/currencies';
 
 const expenseSchema = yup.object({
   amount: yup.number().typeError('Amount must be a number').positive('Amount must be positive').required('Amount is required'),
+  currency: yup.string().default('USD'),
   date: yup.string().required('Date is required'),
   note: yup.string().required('Note/Merchant is required'),
   category_id: yup.string().required('Category is required'),
@@ -28,6 +30,7 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
   const [naturalLanguage, setNaturalLanguage] = useState('');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [parsedData, setParsedData] = useState<any>(null);
+  const [selectedCurrency, setSelectedCurrency] = useState('USD');
   
   const { categories } = useCategories();
   const { trigger: parseAi, isMutating: isParsing } = useAiParse();
@@ -60,8 +63,10 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
         const d = new Date(expenseToEdit.date);
         setValue('date', !isNaN(d.getTime()) ? d.toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
         setValue('category_id', expenseToEdit.category_id || '');
+        setValue('currency', expenseToEdit.currency || 'USD');
+        setSelectedCurrency(expenseToEdit.currency || 'USD');
       } else {
-        // Form is cleared below in handleClose
+        setSelectedCurrency('USD');
       }
     }
   }, [isOpen, expenseToEdit, setValue]);
@@ -89,6 +94,9 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
     try {
       const expenseData = {
         amount: Number(data.amount),
+        currency: selectedCurrency,
+        original_amount: selectedCurrency !== 'USD' ? Number(data.amount) : undefined,
+        exchange_rate: selectedCurrency !== 'USD' ? 1 : undefined,
         notes: data.note || 'Expense',
         date: data.date ? new Date(data.date).toISOString() : new Date().toISOString(),
         category_id: data.category_id || (categories[0]?.id as string) || '',
@@ -109,8 +117,10 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
   const handleClose = () => {
     setNaturalLanguage('');
     setParsedData(null);
+    setSelectedCurrency('USD');
     reset({
       amount: undefined,
+      currency: 'USD',
       note: '',
       date: new Date().toISOString().split('T')[0],
       category_id: '',
@@ -177,14 +187,25 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5 col-span-2 sm:col-span-1">
                   <label className="text-sm font-medium">Amount</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-2.5 text-foreground/50">$</span>
-                    <input
-                      type="number"
-                      step="0.01"
-                      {...register('amount')}
-                      className={`w-full h-10 pl-8 pr-3 bg-transparent border ${errors.amount ? 'border-red-500' : 'border-foreground/20'} rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50`}
-                    />
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <span className="absolute left-3 top-2.5 text-foreground/50">{getCurrencySymbol(selectedCurrency)}</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        {...register('amount')}
+                        className={`w-full h-10 pl-8 pr-3 bg-transparent border ${errors.amount ? 'border-red-500' : 'border-foreground/20'} rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50`}
+                      />
+                    </div>
+                    <select
+                      value={selectedCurrency}
+                      onChange={(e) => setSelectedCurrency(e.target.value)}
+                      className="w-24 h-10 px-2 bg-transparent border border-foreground/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm"
+                    >
+                      {CURRENCIES.map((c) => (
+                        <option key={c.code} value={c.code}>{c.code}</option>
+                      ))}
+                    </select>
                   </div>
                   {errors.amount && <p className="text-xs text-red-500">{errors.amount.message}</p>}
                 </div>
