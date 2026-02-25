@@ -58,14 +58,23 @@ export function useCategories() {
 
       const { error: insertError } = await supabase.from('categories').insert(payload);
 
-      inFlightRef.current = false;
-
       if (insertError) {
-        console.error('Failed seeding default categories', insertError);
-        return;
+        // Fallback: insert one-by-one so partial success is possible under stricter DB/RLS constraints
+        for (const category of payload) {
+          const { error: singleInsertError } = await supabase.from('categories').insert(category);
+          if (singleInsertError) {
+            console.warn('Skip default category seed', {
+              name: category.name,
+              message: singleInsertError.message,
+              code: singleInsertError.code,
+              details: singleInsertError.details,
+            });
+          }
+        }
       }
 
-      seededRef.current = `${user.uid}:${data.length + missingDefaults.length}`;
+      inFlightRef.current = false;
+      seededRef.current = currentKey;
       mutate();
     };
 
