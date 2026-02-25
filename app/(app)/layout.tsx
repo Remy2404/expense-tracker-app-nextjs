@@ -3,6 +3,7 @@ import MobileNav from '@/components/MobileNav';
 import MobileHeader from '@/components/MobileHeader';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { AiChatWidget } from '@/components/AiChatWidget';
+import { NotificationsBootstrap } from '@/components/NotificationsBootstrap';
 
 export default function AppLayout({
   children,
@@ -21,6 +22,7 @@ export default function AppLayout({
             </div>
           </main>
           <MobileNav />
+          <NotificationsBootstrap />
           <AiChatWidget />
         </div>
       </div>

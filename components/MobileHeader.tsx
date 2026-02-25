@@ -3,7 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
-import { Wallet, Bell, LogOut } from 'lucide-react';
+import { Wallet, LogOut } from 'lucide-react';
+import { NotificationsBell } from '@/components/NotificationsBell';
 
 export default function MobileHeader() {
   const router = useRouter();
@@ -24,9 +25,7 @@ export default function MobileHeader() {
         <span className="font-bold text-lg tracking-tight">ExpenseVault</span>
       </div>
       <div className="flex items-center gap-3 text-foreground/70">
-        <button className="hover:text-foreground transition-colors">
-          <Bell size={20} />
-        </button>
+        <NotificationsBell />
         <button 
           onClick={handleSignOut}
           className="hover:text-destructive transition-colors"
