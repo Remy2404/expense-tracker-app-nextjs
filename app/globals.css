@@ -85,3 +85,25 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Prevent native form controls from drifting into unreadable colors across themes. */
+input,
+textarea {
+  color: var(--foreground);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted-foreground);
+}
+
+select {
+  color: var(--foreground) !important;
+  background-color: var(--background) !important;
+}
+
+select option,
+select optgroup {
+  color: var(--foreground) !important;
+  background-color: var(--card) !important;
+}

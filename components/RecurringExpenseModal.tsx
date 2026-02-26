@@ -118,7 +118,7 @@ export function RecurringExpenseModal({ isOpen, onClose, editingItem, categories
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.00"
-              className="mt-1 w-full h-10 px-3 border border-border rounded-lg bg-transparent"
+              className="mt-1 w-full h-10 px-3 border border-border rounded-lg bg-background text-foreground"
               required
             />
           </div>
@@ -128,7 +128,7 @@ export function RecurringExpenseModal({ isOpen, onClose, editingItem, categories
             <select
               value={categoryId}
               onChange={(e) => setCategoryId(e.target.value)}
-              className="mt-1 w-full h-10 px-3 border border-border rounded-lg bg-transparent"
+              className="mt-1 w-full h-10 px-3 border border-border rounded-lg bg-background text-foreground"
               required
             >
               <option value="">Select category</option>
@@ -145,7 +145,7 @@ export function RecurringExpenseModal({ isOpen, onClose, editingItem, categories
             <select
               value={frequency}
               onChange={(e) => setFrequency(e.target.value as RecurringFrequency)}
-              className="mt-1 w-full h-10 px-3 border border-border rounded-lg bg-transparent"
+              className="mt-1 w-full h-10 px-3 border border-border rounded-lg bg-background text-foreground"
               required
             >
               {frequencyOptions.map((opt) => (
@@ -163,7 +163,7 @@ export function RecurringExpenseModal({ isOpen, onClose, editingItem, categories
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="mt-1 w-full h-10 px-3 border border-border rounded-lg bg-transparent"
+                className="mt-1 w-full h-10 px-3 border border-border rounded-lg bg-background text-foreground"
                 required
               />
             </div>
@@ -173,7 +173,7 @@ export function RecurringExpenseModal({ isOpen, onClose, editingItem, categories
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="mt-1 w-full h-10 px-3 border border-border rounded-lg bg-transparent"
+                className="mt-1 w-full h-10 px-3 border border-border rounded-lg bg-background text-foreground"
               />
             </div>
           </div>
@@ -185,7 +185,7 @@ export function RecurringExpenseModal({ isOpen, onClose, editingItem, categories
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Optional notes..."
               rows={2}
-              className="mt-1 w-full px-3 py-2 border border-border rounded-lg bg-transparent resize-none"
+              className="mt-1 w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground resize-none"
             />
           </div>
 
@@ -213,7 +213,7 @@ export function RecurringExpenseModal({ isOpen, onClose, editingItem, categories
                 <select
                   value={notificationDaysBefore}
                   onChange={(e) => setNotificationDaysBefore(parseInt(e.target.value))}
-                  className="mt-1 w-full h-10 px-3 border border-border rounded-lg bg-transparent"
+                  className="mt-1 w-full h-10 px-3 border border-border rounded-lg bg-background text-foreground"
                 >
                   {notificationDaysOptions.map((opt) => (
                     <option key={opt.value} value={opt.value}>

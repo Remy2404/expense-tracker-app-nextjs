@@ -1,24 +1,17 @@
 'use client';
 
-import { Plus, Sparkles, AlertTriangle, ShieldAlert, Info, LogOut } from 'lucide-react';
-import { useExpenses, useBudgets, useCategories, useAddExpense, useAddCategory } from '@/hooks/useData';
+import { Plus, Sparkles, AlertTriangle, ShieldAlert, Info } from 'lucide-react';
+import { useExpenses, useBudgets, useCategories } from '@/hooks/useData';
 import { useAiNudges } from '@/hooks/useAi';
 import { useMemo, useState } from 'react';
 import { AddExpenseModal } from '@/components/AddExpenseModal';
-import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase';
 import { getCurrencySymbol } from '@/lib/currencies';
-import { signOut } from 'firebase/auth';
 export default function DashboardPage() {
   const { expenses, isLoading: expensesLoading } = useExpenses();
   const { budgets, isLoading: budgetsLoading } = useBudgets();
   const { categories, isLoading: categoriesLoading } = useCategories();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const { data: nudgesData, isLoading: nudgesLoading } = useAiNudges();
-  const { trigger: addExpense, isMutating: isAdding } = useAddExpense();
-  const { trigger: addCategory, isMutating: isAddingCat } = useAddCategory();
-  const { user } = useAuth();
-
 
   const isLoading = expensesLoading || budgetsLoading || categoriesLoading;
 
@@ -68,6 +61,16 @@ export default function DashboardPage() {
     return category?.name || 'Unknown';
   }, [currentMonthExpenses, categories]);
 
+  const recentTransactions = useMemo(() => {
+    return [...expenses]
+      .sort((a, b) => {
+        const dateA = new Date(typeof a.date === 'string' ? a.date : a.date.toISOString()).getTime();
+        const dateB = new Date(typeof b.date === 'string' ? b.date : b.date.toISOString()).getTime();
+        return dateB - dateA;
+      })
+      .slice(0, 5);
+  }, [expenses]);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -115,7 +118,7 @@ export default function DashboardPage() {
               <div className="text-center">
                 <p className="text-muted-foreground mb-4">Recent Transactions</p>
                 <div className="space-y-2 text-left w-full max-w-sm">
-                  {expenses.slice(0, 5).map(exp => (
+                  {recentTransactions.map(exp => (
                     <div key={exp.id} className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">
                       <span className="truncate max-w-[150px]">{exp.notes || 'Expense'}</span>
                       <span className="font-medium">{getCurrencySymbol(exp.currency || 'USD')}{exp.amount.toFixed(2)}</span>

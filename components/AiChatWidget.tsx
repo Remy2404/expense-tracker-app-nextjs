@@ -4,13 +4,33 @@ import { useState, useRef, useEffect } from 'react';
 import { Bot, X, Send } from 'lucide-react';
 import { useAiChat } from '@/hooks/useAi';
 import { AiChatHistoryItem } from '@/types/ai';
+import { useAddExpense, useCategories } from '@/hooks/useData';
+import { useSWRConfig } from 'swr';
+import ReactMarkdown from 'react-markdown';
 
 export function AiChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<AiChatHistoryItem[]>([{ role: 'assistant', content: 'Hi! I am your AI financial assistant. How can I help you today?' }]);
   const [input, setInput] = useState('');
   const { trigger: sendChat, isMutating: isLoading } = useAiChat();
+  const { trigger: addExpense } = useAddExpense();
+  const { categories } = useCategories();
+  const { mutate } = useSWRConfig();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const formatAssistantContent = (content: string) => {
+    if (!content) return content;
+    // Improve readability when backend returns compact markdown fragments in one line.
+    return content.replace(/\s(?=\*\*[^*]+:\*\*)/g, '\n');
+  };
+
+  const resolveCategoryId = (categoryId: string | null, categoryName: string | null) => {
+    if (categoryId) return categoryId;
+    if (!categoryName) return '';
+    return (
+      categories.find((cat) => cat.name.trim().toLowerCase() === categoryName.trim().toLowerCase())?.id || ''
+    );
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -31,12 +51,46 @@ export function AiChatWidget() {
     setInput('');
 
     try {
+      const historyWithUser = [...messages, userMessage];
       const response = await sendChat({
         question: userMessage.content,
-        history: messages,
+        history: historyWithUser,
       });
 
-      setMessages(prev => [...prev, { role: 'assistant', content: response.answer }]);
+      let assistantContent = formatAssistantContent(response.answer || '');
+
+      // Keep AI chat behavior aligned with "New Expense" flow:
+      // when AI returns a silent add_expense payload, persist it and refresh dashboard data.
+      if (response.intent === 'add_expense' && response.silent_action && response.payload?.amount) {
+        const categoryId = resolveCategoryId(response.payload.categoryId, response.payload.category);
+        if (categoryId) {
+          const expenseDate = response.payload.date ? new Date(response.payload.date) : new Date();
+          const note =
+            response.payload.noteSummary ||
+            response.payload.note ||
+            response.payload.merchant ||
+            'Expense';
+
+          await addExpense({
+            amount: response.payload.amount,
+            currency: 'USD',
+            notes: note,
+            date: expenseDate.toISOString(),
+            category_id: categoryId,
+            merchant: response.payload.merchant || undefined,
+          });
+
+          await Promise.all([mutate('expenses'), mutate('/api/ai/nudges')]);
+
+          if (!assistantContent.trim()) {
+            assistantContent = `Added expense: **$${response.payload.amount.toFixed(2)}**`;
+          }
+        } else if (!assistantContent.trim()) {
+          assistantContent = 'I found the amount, but I still need a valid category before saving.';
+        }
+      }
+
+      setMessages((prev) => [...prev, { role: 'assistant', content: assistantContent }]);
     } catch (error) {
       console.error('Chat error:', error);
       setMessages(prev => [...prev, { role: 'assistant', content: "Sorry, I'm having trouble connecting right now." }]);
@@ -92,7 +146,15 @@ export function AiChatWidget() {
                       : 'bg-card border border-border text-card-foreground rounded-bl-sm shadow-sm'
                   }`}
                 >
-                  {msg.content}
+                  {msg.role === 'assistant' ? (
+                    <ReactMarkdown
+                      className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-li:my-0 prose-ul:my-1"
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
+                  ) : (
+                    msg.content
+                  )}
                 </div>
               </div>
             ))}

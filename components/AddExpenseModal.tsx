@@ -216,7 +216,7 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
                     <select
                       value={selectedCurrency}
                       onChange={(e) => setSelectedCurrency(e.target.value)}
-                      className="w-24 h-10 px-2 bg-transparent border border-foreground/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm"
+                      className="w-24 h-10 px-2 bg-background text-foreground border border-foreground/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm"
                     >
                       {CURRENCIES.map((c) => (
                         <option key={c.code} value={c.code}>{c.code}</option>
