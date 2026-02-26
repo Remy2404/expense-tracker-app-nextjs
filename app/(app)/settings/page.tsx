@@ -1,53 +1,67 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { signOut } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
 import { Sun, Moon, Monitor, Bell, LogOut, Loader2, User } from 'lucide-react';
-
-type Theme = 'light' | 'dark' | 'system';
+import { useTheme } from 'next-themes';
 
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, signOutUser, linkGoogleProvider, isGoogleLinked } = useAuth();
   const router = useRouter();
+  const { theme, setTheme, resolvedTheme } = useTheme();
 
-  const [theme, setTheme] = useState<Theme>('system');
   const [dailyReminder, setDailyReminder] = useState(false);
   const [reminderTime, setReminderTime] = useState('09:00');
   const [isLoading, setIsLoading] = useState(false);
+  const [isLinkingGoogle, setIsLinkingGoogle] = useState(false);
+  const [authFeedback, setAuthFeedback] = useState('');
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  const authMethod = user?.providerData.some((providerData) => providerData.providerId === 'password')
+    ? 'Signed in with email'
+    : isGoogleLinked
+      ? 'Signed in with Google'
+      : 'Signed in';
 
   const handleSignOut = async () => {
     try {
       setIsLoading(true);
-      await signOut(auth);
+      setAuthFeedback('');
+      const result = await signOutUser();
+      if (!result.success) {
+        setAuthFeedback(result.error || 'Failed to sign out.');
+        return;
+      }
+
       router.push('/login');
-    } catch (error) {
-      console.error('Error signing out:', error);
-      alert('Failed to sign out');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleThemeChange = (newTheme: Theme) => {
-    setTheme(newTheme);
-    // Apply theme to document
-    if (newTheme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else if (newTheme === 'light') {
-      document.documentElement.classList.remove('dark');
-    } else {
-      // System preference
-      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
+  const handleLinkGoogle = async () => {
+    setAuthFeedback('');
+    setIsLinkingGoogle(true);
+    try {
+      const result = await linkGoogleProvider();
+      if (!result.success) {
+        setAuthFeedback(result.error || 'Failed to link Google account.');
+        return;
       }
+
+      setAuthFeedback('Google account linked successfully.');
+    } finally {
+      setIsLinkingGoogle(false);
     }
-    // Persist to localStorage (would use a proper context in production)
-    localStorage.setItem('theme', newTheme);
+  };
+
+  const handleThemeChange = (newTheme: 'light' | 'dark' | 'system') => {
+    setTheme(newTheme);
   };
 
   const handleDailyReminderToggle = () => {
@@ -75,21 +89,35 @@ export default function SettingsPage() {
           </div>
           <div>
             <p className="font-medium">{user?.email || 'Guest'}</p>
-            <p className="text-sm text-foreground/60">
-              {user ? 'Signed in with email' : 'Not signed in'}
-            </p>
+            <p className="text-sm text-foreground/60">{user ? authMethod : 'Not signed in'}</p>
           </div>
         </div>
         {user && (
-          <button
-            onClick={handleSignOut}
-            disabled={isLoading}
-            className="mt-4 flex items-center gap-2 px-4 py-2 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
-          >
-            {isLoading ? <Loader2 size={18} className="animate-spin" /> : <LogOut size={18} />}
-            Sign Out
-          </button>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            {!isGoogleLinked && (
+              <button
+                onClick={handleLinkGoogle}
+                disabled={isLinkingGoogle || isLoading}
+                className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg hover:bg-muted transition-colors disabled:opacity-50"
+              >
+                {isLinkingGoogle ? <Loader2 size={18} className="animate-spin" /> : null}
+                {isLinkingGoogle ? 'Linking Google...' : 'Link Google account'}
+              </button>
+            )}
+
+            <button
+              onClick={handleSignOut}
+              disabled={isLoading || isLinkingGoogle}
+              className="flex items-center gap-2 px-4 py-2 border border-destructive/30 text-destructive rounded-lg hover:bg-destructive/10 transition-colors disabled:opacity-50"
+            >
+              {isLoading ? <Loader2 size={18} className="animate-spin" /> : <LogOut size={18} />}
+              Sign Out
+            </button>
+          </div>
         )}
+        {authFeedback ? (
+          <p className="mt-3 text-sm text-foreground/70">{authFeedback}</p>
+        ) : null}
       </div>
 
       {/* Theme Selection */}
@@ -98,36 +126,43 @@ export default function SettingsPage() {
           <Sun size={20} />
           Appearance
         </h2>
+        <p className="text-sm text-foreground/60 mb-4">
+          Active theme: {isMounted && resolvedTheme === 'dark' ? 'Dark' : 'Light'}
+          {isMounted && theme === 'system' ? ' (System)' : ''}
+        </p>
         <div className="grid grid-cols-3 gap-3">
           <button
             onClick={() => handleThemeChange('light')}
+            disabled={!isMounted}
             className={`flex flex-col items-center gap-2 p-4 rounded-lg border transition-colors ${
-              theme === 'light'
+              isMounted && theme === 'light'
                 ? 'border-primary bg-primary/10 text-primary'
                 : 'border-border hover:bg-muted'
-            }`}
+            } ${!isMounted ? 'opacity-60 cursor-not-allowed' : ''}`}
           >
             <Sun size={24} />
             <span className="text-sm font-medium">Light</span>
           </button>
           <button
             onClick={() => handleThemeChange('dark')}
+            disabled={!isMounted}
             className={`flex flex-col items-center gap-2 p-4 rounded-lg border transition-colors ${
-              theme === 'dark'
+              isMounted && theme === 'dark'
                 ? 'border-primary bg-primary/10 text-primary'
                 : 'border-border hover:bg-muted'
-            }`}
+            } ${!isMounted ? 'opacity-60 cursor-not-allowed' : ''}`}
           >
             <Moon size={24} />
             <span className="text-sm font-medium">Dark</span>
           </button>
           <button
             onClick={() => handleThemeChange('system')}
+            disabled={!isMounted}
             className={`flex flex-col items-center gap-2 p-4 rounded-lg border transition-colors ${
-              theme === 'system'
+              isMounted && theme === 'system'
                 ? 'border-primary bg-primary/10 text-primary'
                 : 'border-border hover:bg-muted'
-            }`}
+            } ${!isMounted ? 'opacity-60 cursor-not-allowed' : ''}`}
           >
             <Monitor size={24} />
             <span className="text-sm font-medium">System</span>

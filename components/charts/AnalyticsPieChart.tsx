@@ -20,8 +20,8 @@ const DEFAULT_COLORS = [
 ];
 
 export function AnalyticsPieChart({ data, currency = 'USD' }: PieChartProps) {
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
 
   const colors = useMemo(() => ({
     text: isDark ? '#9ca3af' : '#6b7280',
@@ -42,8 +42,6 @@ export function AnalyticsPieChart({ data, currency = 'USD' }: PieChartProps) {
     ...item,
     color: item.color || DEFAULT_COLORS[index % DEFAULT_COLORS.length]
   }));
-
-  const total = coloredData.reduce((sum, item) => sum + item.amount, 0);
 
   return (
     <ResponsiveContainer width="100%" height={220}>

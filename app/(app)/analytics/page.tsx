@@ -7,13 +7,11 @@ import { currencyFormat } from '@/lib/billSplit';
 import { AnalyticsBarChart, AnalyticsLineChart, AnalyticsPieChart } from '@/components/charts';
 import { TrendingUp, TrendingDown, Sparkles, TrendingUp as TrendUpIcon, TrendingDown as TrendDownIcon, Share2, BarChart3 } from 'lucide-react';
 import { AiInsightType } from '@/types/ai';
-import { useTheme } from 'next-themes';
-import { format, eachDayOfInterval, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, subMonths, subWeeks, subYears, differenceInDays, startOfDay, endOfDay } from 'date-fns';
+import { format, eachDayOfInterval, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear, subMonths, subWeeks, subYears, differenceInDays } from 'date-fns';
 
 type Period = 'week' | 'month' | 'year';
 
 export default function AnalyticsPage() {
-  const { theme } = useTheme();
   const { expenses, isLoading: expensesLoading } = useExpenses();
   const { categories } = useCategories();
   const { data: forecastData, isLoading: forecastLoading } = useAiForecast();
@@ -101,7 +99,7 @@ export default function AnalyticsPage() {
       });
     });
 
-    return Array.from(categoryTotals.entries()).map(([id, data]) => ({
+    return Array.from(categoryTotals.entries()).map(([, data]) => ({
       name: data.name,
       amount: data.amount,
       color: data.color,

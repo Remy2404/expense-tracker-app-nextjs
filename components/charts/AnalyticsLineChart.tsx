@@ -17,9 +17,8 @@ interface LineChartProps {
 }
 
 export function AnalyticsLineChart({ data, currency = 'USD' }: LineChartProps) {
-  const { theme } = useTheme();
-
-  const isDark = theme === 'dark';
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
 
   const colors = useMemo(() => ({
     stroke: isDark ? '#818cf8' : '#6366f1',

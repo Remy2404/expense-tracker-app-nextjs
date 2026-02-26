@@ -8,6 +8,7 @@ import { useAddCategory, useCategories, useDeleteCategory, useEditCategory } fro
 import { MOBILE_DEFAULT_CATEGORIES } from '@/constants/defaultCategories';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { getCategoryIconComponent } from '@/lib/categoryAppearance';
 
 export default function CategoriesPage() {
   const { user } = useAuth();
@@ -193,35 +194,46 @@ export default function CategoriesPage() {
           </div>
         ) : (
           <div className="divide-y divide-border">
-            {categories.map((category) => (
-              <div key={category.id} className="p-4 sm:p-6 flex items-center justify-between hover:bg-foreground/5 transition-colors group">
-                <div className="flex items-center gap-4">
-                  <span className="w-4 h-4 rounded-full" style={{ backgroundColor: category.color }} />
-                  <div>
-                    <h4 className="font-medium text-foreground">{category.name}</h4>
-                    <p className="text-sm text-foreground/60">{category.icon}</p>
+            {categories.map((category) => {
+              const IconComponent = getCategoryIconComponent(category.icon);
+              return (
+                <div key={category.id} className="p-4 sm:p-6 flex items-center justify-between hover:bg-foreground/5 transition-colors group">
+                  <div className="flex items-center gap-4">
+                    <div
+                      className="w-10 h-10 rounded-full flex items-center justify-center"
+                      style={{ backgroundColor: `${category.color}20` }}
+                    >
+                      <IconComponent size={18} style={{ color: category.color }} />
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-foreground">{category.name}</h4>
+                      <div className="flex items-center gap-2 text-sm text-foreground/60">
+                        <span className="w-3 h-3 rounded-full" style={{ backgroundColor: category.color }} />
+                        <span>{category.icon}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => handleEdit(category)}
+                      className="p-2 text-foreground/60 hover:text-primary hover:bg-primary/10 rounded-full transition-colors"
+                      title="Edit"
+                    >
+                      <Edit2 size={16} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(category.id)}
+                      disabled={deletingId === category.id}
+                      className="p-2 text-foreground/60 hover:text-destructive hover:bg-destructive/10 rounded-full transition-colors disabled:opacity-50"
+                      title="Delete"
+                    >
+                      {deletingId === category.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                    </button>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => handleEdit(category)}
-                    className="p-2 text-foreground/60 hover:text-primary hover:bg-primary/10 rounded-full transition-colors"
-                    title="Edit"
-                  >
-                    <Edit2 size={16} />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(category.id)}
-                    disabled={deletingId === category.id}
-                    className="p-2 text-foreground/60 hover:text-red-500 hover:bg-red-500/10 rounded-full transition-colors disabled:opacity-50"
-                    title="Delete"
-                  >
-                    {deletingId === category.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

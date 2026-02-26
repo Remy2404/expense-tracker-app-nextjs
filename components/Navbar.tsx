@@ -3,22 +3,18 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { signOut } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
 import { Wallet, LogOut, LayoutDashboard, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function Navbar() {
-  const { user, loading } = useAuth();
+  const { user, loading, signOutUser } = useAuth();
   const router = useRouter();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   const handleSignOut = async () => {
-    try {
-      await signOut(auth);
+    const result = await signOutUser();
+    if (result.success) {
       router.push('/login');
-    } catch (error) {
-      console.error('Error signing out:', error);
     }
   };
 

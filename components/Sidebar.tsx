@@ -2,12 +2,12 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { signOut } from 'firebase/auth';
 import { Home, Receipt, PieChart, BarChart3, Settings, LogOut, Wallet, Users, Bell, Tags, Target, RefreshCw } from 'lucide-react';
-import { auth } from '@/lib/firebase';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function Sidebar() {
   const router = useRouter();
+  const { signOutUser } = useAuth();
 
   const navItems = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
@@ -23,11 +23,9 @@ export default function Sidebar() {
   ];
 
   const handleSignOut = async () => {
-    try {
-      await signOut(auth);
+    const result = await signOutUser();
+    if (result.success) {
       router.push('/login');
-    } catch (error) {
-      console.error('Error signing out:', error);
     }
   };
 
@@ -55,10 +53,6 @@ export default function Sidebar() {
       </nav>
 
       <div className="p-4 border-t border-foreground/10 space-y-1">
-        <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-foreground/5 text-foreground/80 hover:text-foreground font-medium transition-colors">
-          <Settings size={20} />
-          Settings
-        </button>
         <button 
           onClick={handleSignOut}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-destructive/10 text-destructive font-medium transition-colors"

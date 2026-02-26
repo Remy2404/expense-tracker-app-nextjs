@@ -18,9 +18,8 @@ interface BarChartProps {
 }
 
 export function AnalyticsBarChart({ data, currency = 'USD' }: BarChartProps) {
-  const { theme } = useTheme();
-
-  const isDark = theme === 'dark';
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
 
   const colors = useMemo(() => ({
     fill: isDark ? '#6366f1' : '#4f46e5',

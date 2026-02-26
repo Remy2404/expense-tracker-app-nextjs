@@ -3,9 +3,11 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { FirebaseError } from 'firebase/app';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { Wallet, Loader2 } from 'lucide-react';
 import { auth } from '@/lib/firebase';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function SignupPage() {
   const [email, setEmail] = useState('');
@@ -13,6 +15,7 @@ export default function SignupPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const { signInWithGoogle } = useAuth();
   const router = useRouter();
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -37,8 +40,6 @@ export default function SignupPage() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      console.log('Signup successful, user:', user.email, user.uid);
-
       // Check if email is available
       if (!user.email) {
         setError('Account created but email is not available. Please contact support.');
@@ -46,9 +47,13 @@ export default function SignupPage() {
       }
 
       router.push('/dashboard');
-    } catch (err: any) {
-      console.error('Signup error:', err);
+    } catch (err: unknown) {
       // Provide more helpful error messages
+      if (!(err instanceof FirebaseError)) {
+        setError(err instanceof Error ? err.message : 'Failed to create an account.');
+        return;
+      }
+
       if (err.code === 'auth/email-already-in-use') {
         setError('This email is already registered. Please sign in instead.');
       } else if (err.code === 'auth/invalid-email') {
@@ -58,8 +63,25 @@ export default function SignupPage() {
       } else if (err.code === 'auth/operation-not-allowed') {
         setError('Email/Password sign-up is not enabled. Please enable it in Firebase Console.');
       } else {
-        setError(err instanceof Error ? err.message : 'Failed to create an account.');
+        setError(err.message || 'Failed to create an account.');
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSignup = async () => {
+    setError('');
+    setLoading(true);
+
+    try {
+      const result = await signInWithGoogle();
+      if (result.success) {
+        router.push('/dashboard');
+        return;
+      }
+
+      setError(result.error || 'Failed to sign in with Google.');
     } finally {
       setLoading(false);
     }
@@ -127,6 +149,46 @@ export default function SignupPage() {
             className="w-full h-10 bg-foreground text-background font-medium rounded-md hover:opacity-90 transition-opacity flex items-center justify-center disabled:opacity-50 mt-2"
           >
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Create Account'}
+          </button>
+
+          <div className="relative py-2">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-foreground/15" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase tracking-wide text-foreground/60">
+              <span className="bg-background px-2">or</span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleGoogleSignup}
+            disabled={loading}
+            className="w-full h-10 border border-foreground/20 rounded-md hover:bg-foreground/5 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {loading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <svg viewBox="0 0 24 24" aria-hidden="true" className="w-4 h-4">
+                <path
+                  fill="#4285F4"
+                  d="M23.49 12.27c0-.79-.07-1.54-.2-2.27H12v4.3h6.45a5.52 5.52 0 0 1-2.39 3.62v3h3.86c2.26-2.08 3.57-5.14 3.57-8.65Z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 24c3.24 0 5.96-1.07 7.95-2.9l-3.86-3c-1.07.72-2.44 1.15-4.09 1.15-3.14 0-5.8-2.12-6.75-4.98H1.27v3.09A12 12 0 0 0 12 24Z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.25 14.27A7.2 7.2 0 0 1 4.87 12c0-.79.14-1.56.38-2.27V6.64H1.27A12 12 0 0 0 0 12c0 1.94.46 3.77 1.27 5.36l3.98-3.09Z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 4.75c1.76 0 3.34.61 4.58 1.8l3.43-3.43A11.44 11.44 0 0 0 12 0 12 12 0 0 0 1.27 6.64l3.98 3.09c.95-2.86 3.61-4.98 6.75-4.98Z"
+                />
+              </svg>
+            )}
+            Continue with Google
           </button>
         </form>
         

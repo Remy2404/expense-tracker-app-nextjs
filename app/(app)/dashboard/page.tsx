@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, Sparkles, AlertTriangle, ShieldAlert, Info } from 'lucide-react';
+import { Plus, Sparkles, AlertTriangle, ShieldAlert, Info, LogOut } from 'lucide-react';
 import { useExpenses, useBudgets, useCategories, useAddExpense, useAddCategory } from '@/hooks/useData';
 import { useAiNudges } from '@/hooks/useAi';
 import { useMemo, useState } from 'react';
@@ -8,6 +8,7 @@ import { AddExpenseModal } from '@/components/AddExpenseModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { getCurrencySymbol } from '@/lib/currencies';
+import { signOut } from 'firebase/auth';
 export default function DashboardPage() {
   const { expenses, isLoading: expensesLoading } = useExpenses();
   const { budgets, isLoading: budgetsLoading } = useBudgets();
@@ -74,17 +75,6 @@ export default function DashboardPage() {
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-foreground/60">Overview of your recent expenses and budget.</p>
         </div>
-        <div className="flex items-center gap-3 px-4 py-2 bg-card border border-border rounded-lg">
-          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-            <span className="text-sm font-medium text-primary">
-              {user?.email?.charAt(0).toUpperCase() || '?'}
-            </span>
-          </div>
-          <div className="text-sm">
-            <p className="font-medium truncate max-w-[200px]">{user?.displayName || user?.email || 'User'}</p>
-            <p className="text-foreground/50 text-xs truncate max-w-[200px]">{user?.email || 'No email'}</p>
-          </div>
-        </div>
         <div className="flex gap-2">
 
           <button 
@@ -93,7 +83,6 @@ export default function DashboardPage() {
           >
             <Plus size={18} />
             New Expense
-
           </button>
         </div>
       </div>

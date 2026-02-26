@@ -3,15 +3,18 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { FirebaseError } from 'firebase/app';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { Wallet, Loader2 } from 'lucide-react';
 import { auth } from '@/lib/firebase';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const { signInWithGoogle } = useAuth();
   const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -29,8 +32,6 @@ export default function LoginPage() {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      console.log('Login successful, user:', user.email, user.uid);
-
       // Check if email is available
       if (!user.email) {
         setError('Login succeeded but email is not available. Please contact support.');
@@ -38,20 +39,45 @@ export default function LoginPage() {
       }
 
       router.push('/dashboard');
-    } catch (err: any) {
-      console.error('Login error:', err);
+    } catch (err: unknown) {
       // Provide more helpful error messages
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
+      if (!(err instanceof FirebaseError)) {
+        setError(err instanceof Error ? err.message : 'Failed to sign in. Please check your credentials.');
+        return;
+      }
+
+      if (
+        err.code === 'auth/invalid-credential' ||
+        err.code === 'auth/wrong-password' ||
+        err.code === 'auth/user-not-found'
+      ) {
         setError('Invalid email or password. Please try again.');
       } else if (err.code === 'auth/user-disabled') {
         setError('This account has been disabled. Please contact support.');
       } else if (err.code === 'auth/too-many-requests') {
         setError('Too many failed attempts. Please try again later or reset your password.');
-      } else if (err.code === 'auth.operation-not-allowed') {
+      } else if (err.code === 'auth/operation-not-allowed') {
         setError('Email/Password sign-in is not enabled. Please enable it in Firebase Console > Authentication.');
       } else {
-        setError(err instanceof Error ? err.message : 'Failed to sign in. Please check your credentials.');
+        setError(err.message || 'Failed to sign in. Please check your credentials.');
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setError('');
+    setLoading(true);
+
+    try {
+      const result = await signInWithGoogle();
+      if (result.success) {
+        router.push('/dashboard');
+        return;
+      }
+
+      setError(result.error || 'Failed to sign in with Google.');
     } finally {
       setLoading(false);
     }
@@ -105,6 +131,46 @@ export default function LoginPage() {
             className="w-full h-10 bg-foreground text-background font-medium rounded-md hover:opacity-90 transition-opacity flex items-center justify-center disabled:opacity-50 mt-2"
           >
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Sign In'}
+          </button>
+
+          <div className="relative py-2">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-foreground/15" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase tracking-wide text-foreground/60">
+              <span className="bg-background px-2">or</span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            disabled={loading}
+            className="w-full h-10 border border-foreground/20 rounded-md hover:bg-foreground/5 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {loading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <svg viewBox="0 0 24 24" aria-hidden="true" className="w-4 h-4">
+                <path
+                  fill="#4285F4"
+                  d="M23.49 12.27c0-.79-.07-1.54-.2-2.27H12v4.3h6.45a5.52 5.52 0 0 1-2.39 3.62v3h3.86c2.26-2.08 3.57-5.14 3.57-8.65Z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 24c3.24 0 5.96-1.07 7.95-2.9l-3.86-3c-1.07.72-2.44 1.15-4.09 1.15-3.14 0-5.8-2.12-6.75-4.98H1.27v3.09A12 12 0 0 0 12 24Z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.25 14.27A7.2 7.2 0 0 1 4.87 12c0-.79.14-1.56.38-2.27V6.64H1.27A12 12 0 0 0 0 12c0 1.94.46 3.77 1.27 5.36l3.98-3.09Z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 4.75c1.76 0 3.34.61 4.58 1.8l3.43-3.43A11.44 11.44 0 0 0 12 0 12 12 0 0 0 1.27 6.64l3.98 3.09c.95-2.86 3.61-4.98 6.75-4.98Z"
+                />
+              </svg>
+            )}
+            Continue with Google
           </button>
         </form>
         

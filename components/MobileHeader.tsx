@@ -1,22 +1,18 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { signOut } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
 import { Wallet, LogOut } from 'lucide-react';
 import { NotificationsBell } from '@/components/NotificationsBell';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function MobileHeader() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, signOutUser } = useAuth();
 
   const handleSignOut = async () => {
-    try {
-      await signOut(auth);
+    const result = await signOutUser();
+    if (result.success) {
       router.push('/login');
-    } catch (error) {
-      console.error('Error signing out:', error);
     }
   };
 

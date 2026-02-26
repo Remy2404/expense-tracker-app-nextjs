@@ -8,6 +8,11 @@ import { useBudgets, useDeleteBudget, useExpenses } from '@/hooks/useData';
 import { currencyFormat } from '@/lib/billSplit';
 import { format } from 'date-fns';
 
+const normalizeMonthKey = (value: string) => {
+  if (!value) return '';
+  return value.slice(0, 7);
+};
+
 export default function BudgetsPage() {
   const { budgets, isLoading: isLoadingBudgets } = useBudgets();
   const { expenses, isLoading: isLoadingExpenses } = useExpenses();
@@ -36,7 +41,8 @@ export default function BudgetsPage() {
   // Calculate budget progress for each budget
   const budgetsWithProgress = useMemo(() => {
     return budgets.map((budget) => {
-      const spent = spendingByMonth[budget.month] || 0;
+      const budgetMonthKey = normalizeMonthKey(budget.month);
+      const spent = spendingByMonth[budgetMonthKey] || 0;
       const remaining = budget.total_amount - spent;
       const percentageUsed = budget.total_amount > 0 ? (spent / budget.total_amount) * 100 : 0;
       const isOverBudget = remaining < 0;
@@ -50,6 +56,20 @@ export default function BudgetsPage() {
       };
     });
   }, [budgets, spendingByMonth]);
+
+  const currentMonthBudget = useMemo(
+    () => budgets.find((b) => normalizeMonthKey(b.month) === currentMonth),
+    [budgets, currentMonth]
+  );
+
+  const latestBudget = useMemo(() => {
+    if (budgets.length === 0) return null;
+    return [...budgets]
+      .sort((a, b) => normalizeMonthKey(b.month).localeCompare(normalizeMonthKey(a.month)))[0];
+  }, [budgets]);
+
+  const summaryBudget = currentMonthBudget ?? latestBudget;
+  const isUsingFallbackBudget = !currentMonthBudget && Boolean(latestBudget);
 
   const handleOpenCreate = () => {
     setEditingBudget(null);
@@ -75,7 +95,7 @@ export default function BudgetsPage() {
   };
 
   const getMonthName = (monthKey: string) => {
-    const [year, month] = monthKey.split('-');
+    const [year, month] = normalizeMonthKey(monthKey).split('-');
     return format(new Date(parseInt(year), parseInt(month) - 1), 'MMMM yyyy');
   };
 
@@ -163,11 +183,13 @@ export default function BudgetsPage() {
           <div className="border border-border rounded-xl p-4 bg-card">
             <p className="text-sm text-foreground/60">Budgeted</p>
             <p className="text-2xl font-bold mt-1">
-              {currencyFormat(
-                budgets.find((b) => b.month === currentMonth)?.total_amount || 0,
-                'USD'
-              )}
+              {currencyFormat(summaryBudget?.total_amount || 0, 'USD')}
             </p>
+            {isUsingFallbackBudget && summaryBudget && (
+              <p className="text-xs text-foreground/60 mt-1">
+                Using {getMonthName(summaryBudget.month)} budget
+              </p>
+            )}
           </div>
         </div>
       )}
