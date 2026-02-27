@@ -25,8 +25,8 @@ SheetOverlay.displayName = DialogPrimitive.Overlay.displayName;
 const sheetVariants: Record<'top' | 'bottom' | 'left' | 'right', string> = {
   top: 'inset-x-0 top-0 border-b',
   bottom: 'inset-x-0 bottom-0 border-t',
-  left: 'inset-y-0 left-0 h-full w-80 border-r sm:max-w-sm',
-  right: 'inset-y-0 right-0 h-full w-80 border-l sm:max-w-sm',
+  left: 'inset-y-0 left-0 h-dvh w-80 border-r sm:max-w-sm',
+  right: 'inset-y-0 right-0 h-dvh w-80 border-l sm:max-w-sm',
 };
 
 interface SheetContentProps extends React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> {

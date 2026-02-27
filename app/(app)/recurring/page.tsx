@@ -1,12 +1,23 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Plus, RefreshCw, Pause, Play, Edit2, Trash2, Loader2, Calendar, Bell } from 'lucide-react';
+import { format, isBefore, isSameDay, startOfDay } from 'date-fns';
 import { RecurringExpense, RecurringFrequency } from '@/types';
 import { RecurringExpenseModal } from '@/components/RecurringExpenseModal';
-import { useRecurringExpenses, useDeleteRecurringExpense, useToggleRecurringExpense, useCategories } from '@/hooks/useData';
+import {
+  useRecurringExpenses,
+  useDeleteRecurringExpense,
+  useToggleRecurringExpense,
+  useCategories,
+} from '@/hooks/useData';
+import { EmptyState } from '@/components/state/EmptyState';
 import { currencyFormat } from '@/lib/billSplit';
-import { format, isBefore, startOfDay, isSameDay } from 'date-fns';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const frequencyLabels: Record<RecurringFrequency, string> = {
   daily: 'Daily',
@@ -27,12 +38,12 @@ export default function RecurringExpensesPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const activeRecurring = useMemo(
-    () => recurringExpenses.filter((r) => r.is_active),
+    () => recurringExpenses.filter((item) => item.is_active),
     [recurringExpenses]
   );
 
   const pausedRecurring = useMemo(
-    () => recurringExpenses.filter((r) => !r.is_active),
+    () => recurringExpenses.filter((item) => !item.is_active),
     [recurringExpenses]
   );
 
@@ -42,23 +53,13 @@ export default function RecurringExpensesPage() {
     next7Days.setDate(today.getDate() + 7);
 
     return recurringExpenses
-      .filter((r) => {
-        if (!r.is_active) return false;
-        const dueDate = startOfDay(new Date(r.next_due_date));
+      .filter((item) => {
+        if (!item.is_active) return false;
+        const dueDate = startOfDay(new Date(item.next_due_date));
         return isBefore(dueDate, next7Days) || isSameDay(dueDate, today);
       })
       .sort((a, b) => new Date(a.next_due_date).getTime() - new Date(b.next_due_date).getTime());
   }, [recurringExpenses]);
-
-  const getCategoryName = (categoryId: string) => {
-    const cat = categories.find((c) => c.id === categoryId);
-    return cat?.name || 'Unknown';
-  };
-
-  const getCategoryColor = (categoryId: string) => {
-    const cat = categories.find((c) => c.id === categoryId);
-    return cat?.color || '#888';
-  };
 
   const handleOpenCreate = () => {
     setEditingItem(null);
@@ -92,70 +93,79 @@ export default function RecurringExpensesPage() {
     }
   };
 
+  const getCategoryName = (categoryId: string) => {
+    const category = categories.find((item) => item.id === categoryId);
+    return category?.name || 'Unknown';
+  };
+
+  const getCategoryColor = (categoryId: string) => {
+    const category = categories.find((item) => item.id === categoryId);
+    return category?.color || 'hsl(var(--muted-foreground))';
+  };
+
   const isOverdue = (item: RecurringExpense) => {
     return isBefore(startOfDay(new Date(item.next_due_date)), startOfDay(new Date())) && item.is_active;
   };
 
   const renderRecurringItem = (item: RecurringExpense) => {
-    const isOverdueItem = isOverdue(item);
+    const overdue = isOverdue(item);
+
     return (
       <div
         key={item.id}
-        className={`p-4 sm:p-6 border-b border-border hover:bg-foreground/5 transition-colors group ${
-          isOverdueItem ? 'bg-red-50 dark:bg-red-950/20' : ''
+        className={`p-4 sm:p-6 border-b border-border last:border-b-0 hover:bg-muted/40 transition-colors group ${
+          overdue ? 'bg-destructive/5' : ''
         }`}
       >
         <div className="flex justify-between items-start gap-4">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
               <span
                 className="w-3 h-3 rounded-full flex-shrink-0"
                 style={{ backgroundColor: getCategoryColor(item.category_id) }}
               />
-              <h4 className="font-semibold truncate">
-                {getCategoryName(item.category_id)}
-              </h4>
-              {!item.is_active && (
-                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                  Paused
-                </span>
-              )}
-              {isOverdueItem && (
-                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">
+              <h4 className="font-semibold truncate">{getCategoryName(item.category_id)}</h4>
+              <Badge variant="outline">{frequencyLabels[item.frequency]}</Badge>
+              {!item.is_active ? <Badge variant="secondary">Paused</Badge> : null}
+              {overdue ? (
+                <Badge variant="outline" className="border-destructive/40 text-destructive">
                   Overdue
-                </span>
-              )}
+                </Badge>
+              ) : null}
             </div>
+
             <p className="text-2xl font-bold">{currencyFormat(item.amount, item.currency || 'USD')}</p>
-            <div className="flex items-center gap-3 mt-2 text-sm text-foreground/60">
-              <span className="flex items-center gap-1">
-                <RefreshCw size={14} />
-                {frequencyLabels[item.frequency]}
-              </span>
+
+            <div className="flex items-center gap-3 mt-2 text-sm text-muted-foreground flex-wrap">
               <span className="flex items-center gap-1">
                 <Calendar size={14} />
-                {isOverdueItem ? 'Was due: ' : 'Next: '}
+                {overdue ? 'Was due: ' : 'Next: '}
                 {format(new Date(item.next_due_date), 'MMM d, yyyy')}
               </span>
-              {item.notification_enabled && (
+              {item.notification_enabled ? (
                 <span className="flex items-center gap-1">
                   <Bell size={14} />
                   {item.notification_days_before === 0
                     ? 'Day of'
-                    : `${item.notification_days_before} day${item.notification_days_before > 1 ? 's' : ''} before`}
+                    : `${item.notification_days_before} day${
+                        item.notification_days_before > 1 ? 's' : ''
+                      } before`}
                 </span>
-              )}
+              ) : null}
             </div>
-            {item.notes && (
-              <p className="text-sm text-foreground/60 mt-2 line-clamp-2">{item.notes}</p>
-            )}
+
+            {item.notes ? (
+              <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{item.notes}</p>
+            ) : null}
           </div>
 
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() => handleToggle(item)}
               disabled={isToggling}
-              className="p-2 text-foreground/60 hover:text-primary hover:bg-primary/10 rounded-full transition-colors disabled:opacity-50"
+              className="h-8 w-8"
               title={item.is_active ? 'Pause' : 'Activate'}
             >
               {isToggling ? (
@@ -165,18 +175,22 @@ export default function RecurringExpensesPage() {
               ) : (
                 <Play size={16} />
               )}
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() => handleEdit(item)}
-              className="p-2 text-foreground/60 hover:text-primary hover:bg-primary/10 rounded-full transition-colors"
+              className="h-8 w-8"
               title="Edit"
             >
               <Edit2 size={16} />
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() => handleDelete(item.id)}
               disabled={deletingId === item.id}
-              className="p-2 text-foreground/60 hover:text-red-500 hover:bg-red-500/10 rounded-full transition-colors disabled:opacity-50"
+              className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
               title="Delete"
             >
               {deletingId === item.id ? (
@@ -184,7 +198,7 @@ export default function RecurringExpensesPage() {
               ) : (
                 <Trash2 size={16} />
               )}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -196,111 +210,126 @@ export default function RecurringExpensesPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Recurring Expenses</h1>
-          <p className="text-foreground/60">Manage your subscriptions and bills.</p>
+          <p className="text-muted-foreground">Manage your subscriptions and bills.</p>
         </div>
-        <button
-          onClick={handleOpenCreate}
-          className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity whitespace-nowrap"
-        >
+        <Button onClick={handleOpenCreate} className="whitespace-nowrap">
           <Plus size={18} />
           Add Recurring
-        </button>
+        </Button>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="border border-border rounded-xl p-4 bg-card">
-          <p className="text-sm text-foreground/60">Active</p>
-          <p className="text-2xl font-bold mt-1">{activeRecurring.length}</p>
-        </div>
-        <div className="border border-border rounded-xl p-4 bg-card">
-          <p className="text-sm text-foreground/60">Paused</p>
-          <p className="text-2xl font-bold mt-1">{pausedRecurring.length}</p>
-        </div>
-        <div className="border border-border rounded-xl p-4 bg-card">
-          <p className="text-sm text-foreground/60">Due This Week</p>
-          <p className="text-2xl font-bold mt-1">{upcomingDue.length}</p>
-        </div>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Active</CardDescription>
+            <CardTitle className="text-2xl">{activeRecurring.length}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Paused</CardDescription>
+            <CardTitle className="text-2xl">{pausedRecurring.length}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>Due This Week</CardDescription>
+            <CardTitle className="text-2xl">{upcomingDue.length}</CardTitle>
+          </CardHeader>
+        </Card>
       </div>
 
-      {/* Upcoming Due */}
-      {upcomingDue.length > 0 && (
-        <div className="border border-border rounded-xl bg-amber-50 dark:bg-amber-950/20 overflow-hidden">
-          <div className="p-4 border-b border-amber-200 dark:border-amber-800">
-            <h3 className="font-semibold text-amber-900 dark:text-amber-100 flex items-center gap-2">
-              <Bell size={16} />
-              Due Soon
-            </h3>
+      {upcomingDue.length > 0 ? (
+        <Alert className="border-amber-500/40 bg-amber-500/10">
+          <div className="space-y-3">
+            <div>
+              <AlertTitle className="flex items-center gap-2">
+                <Bell size={16} />
+                Due Soon
+              </AlertTitle>
+              <AlertDescription>Upcoming recurring expenses in the next 7 days.</AlertDescription>
+            </div>
+            <div className="space-y-2">
+              {upcomingDue.slice(0, 3).map((item) => (
+                <div key={item.id} className="flex justify-between items-center gap-3 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="w-2 h-2 rounded-full"
+                      style={{ backgroundColor: getCategoryColor(item.category_id) }}
+                    />
+                    <span className="font-medium">{getCategoryName(item.category_id)}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-semibold">
+                      {currencyFormat(item.amount, item.currency || 'USD')}
+                    </span>
+                    <span className="text-muted-foreground ml-2">
+                      {format(new Date(item.next_due_date), 'MMM d')}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="divide-y divide-amber-200 dark:divide-amber-800">
-            {upcomingDue.slice(0, 3).map((item) => (
-              <div key={item.id} className="p-3 flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <span
-                    className="w-2 h-2 rounded-full"
-                    style={{ backgroundColor: getCategoryColor(item.category_id) }}
-                  />
-                  <span className="font-medium">{getCategoryName(item.category_id)}</span>
+        </Alert>
+      ) : null}
+
+      <Card className="overflow-hidden shadow-sm">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-base">All Recurring Expenses</CardTitle>
+          <CardDescription>{recurringExpenses.length} entries</CardDescription>
+        </CardHeader>
+        {isLoading ? (
+          <CardContent className="space-y-4">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div key={`recurring-skeleton-${index}`} className="space-y-3">
+                <div className="flex justify-between">
+                  <Skeleton className="h-5 w-40" />
+                  <Skeleton className="h-5 w-24" />
                 </div>
-                <div className="text-right">
-                  <span className="font-semibold">{currencyFormat(item.amount, item.currency || 'USD')}</span>
-                  <span className="text-sm text-foreground/60 ml-2">
-                    {format(new Date(item.next_due_date), 'MMM d')}
-                  </span>
-                </div>
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-4 w-48" />
               </div>
             ))}
-          </div>
-        </div>
-      )}
-
-      {/* List */}
-      <div className="bg-card text-card-foreground border border-border rounded-xl shadow-sm overflow-hidden">
-        {isLoading ? (
-          <div className="p-12 flex justify-center items-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
-          </div>
+          </CardContent>
         ) : recurringExpenses.length === 0 ? (
-          <div className="p-12 flex flex-col items-center justify-center text-center">
-            <div className="w-16 h-16 bg-foreground/5 rounded-full flex items-center justify-center mb-4 text-foreground/40">
-              <RefreshCw size={32} />
-            </div>
-            <h3 className="text-lg font-semibold mb-2">No recurring expenses</h3>
-            <p className="text-foreground/60 max-w-sm mb-6">
-              Add your subscriptions and bills to track and manage them.
-            </p>
-            <button
-              onClick={handleOpenCreate}
-              className="bg-primary text-primary-foreground px-6 py-2.5 rounded-lg font-medium hover:opacity-90 transition-opacity"
-            >
-              Add Recurring Expense
-            </button>
-          </div>
+          <CardContent>
+            <EmptyState
+              title="No recurring expenses"
+              description="Add your subscriptions and bills to track and manage them."
+              actionLabel="Add Recurring Expense"
+              onAction={handleOpenCreate}
+            />
+          </CardContent>
         ) : (
           <div>
-            {activeRecurring.length > 0 && (
+            {activeRecurring.length > 0 ? (
               <>
-                <div className="px-4 sm:px-6 py-3 bg-muted/50 border-b border-border">
-                  <h3 className="text-sm font-semibold text-foreground/60 uppercase tracking-wider">
-                    Active ({activeRecurring.length})
+                <div className="px-4 sm:px-6 py-3 bg-muted/40 border-y border-border">
+                  <h3 className="text-sm font-semibold uppercase tracking-wider flex items-center gap-2">
+                    <RefreshCw size={14} />
+                    Active
+                    <Badge variant="secondary">{activeRecurring.length}</Badge>
                   </h3>
                 </div>
                 {activeRecurring.map(renderRecurringItem)}
               </>
-            )}
-            {pausedRecurring.length > 0 && (
+            ) : null}
+            {pausedRecurring.length > 0 ? (
               <>
-                <div className="px-4 sm:px-6 py-3 bg-muted/50 border-b border-border">
-                  <h3 className="text-sm font-semibold text-foreground/60 uppercase tracking-wider">
-                    Paused ({pausedRecurring.length})
+                <div className="px-4 sm:px-6 py-3 bg-muted/40 border-y border-border">
+                  <h3 className="text-sm font-semibold uppercase tracking-wider flex items-center gap-2">
+                    <Pause size={14} />
+                    Paused
+                    <Badge variant="secondary">{pausedRecurring.length}</Badge>
                   </h3>
                 </div>
                 {pausedRecurring.map(renderRecurringItem)}
               </>
-            )}
+            ) : null}
           </div>
         )}
-      </div>
+      </Card>
 
       <RecurringExpenseModal
         isOpen={isModalOpen}

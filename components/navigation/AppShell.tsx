@@ -41,7 +41,7 @@ export function AppShell({ children }: AppShellProps) {
   };
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
+    <div className="flex min-h-dvh bg-background overflow-x-hidden md:h-dvh md:overflow-hidden">
       <aside className="hidden md:flex md:w-72 md:flex-col border-r border-border bg-card">
         <div className="h-16 px-5 flex items-center gap-2">
           <Wallet className="h-5 w-5 text-primary" />
@@ -61,7 +61,7 @@ export function AppShell({ children }: AppShellProps) {
         </div>
       </aside>
 
-      <div className="flex-1 min-w-0 flex flex-col">
+      <div className="flex min-w-0 flex-1 flex-col md:h-dvh">
         <header className="md:hidden h-14 border-b border-border bg-card/90 backdrop-blur px-4 flex items-center justify-between sticky top-0 z-40">
           <div className="flex items-center gap-3">
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
@@ -70,18 +70,22 @@ export function AppShell({ children }: AppShellProps) {
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-80 p-0">
-                <SheetHeader className="px-5 py-4 border-b border-border">
+              <SheetContent side="left" className="flex h-full w-80 max-w-[92vw] flex-col p-0">
+                <SheetHeader className="shrink-0 border-b border-border px-5 py-4">
                   <SheetTitle className="flex items-center gap-2">
                     <Wallet className="h-5 w-5 text-primary" />
                     ExpenseVault
                   </SheetTitle>
                   <SheetDescription className="truncate">{displayName}</SheetDescription>
                 </SheetHeader>
-                <div className="p-4">
-                  <NavContent onNavigate={() => setMobileOpen(false)} />
-                </div>
-                <div className="mt-auto p-4 border-t border-border">
+
+                <ScrollArea className="min-h-0 flex-1">
+                  <div className="p-4">
+                    <NavContent onNavigate={() => setMobileOpen(false)} />
+                  </div>
+                </ScrollArea>
+
+                <div className="shrink-0 border-t border-border p-4">
                   <Button
                     variant="outline"
                     className="w-full justify-start"
@@ -111,7 +115,7 @@ export function AppShell({ children }: AppShellProps) {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 md:p-8">
+        <main className="flex-1 p-4 pb-24 md:overflow-y-auto md:p-8 md:pb-8">
           <div className="mx-auto w-full max-w-6xl">{children}</div>
         </main>
       </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Tags, Edit2, Trash2, Loader2, RefreshCw } from 'lucide-react';
+import { Plus, Edit2, Trash2, Loader2, RefreshCw } from 'lucide-react';
 import { Category } from '@/types';
 import { CategoryModal } from '@/components/CategoryModal';
 import { useAddCategory, useCategories, useDeleteCategory, useEditCategory } from '@/hooks/useData';
@@ -9,6 +9,13 @@ import { MOBILE_DEFAULT_CATEGORIES } from '@/constants/defaultCategories';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { getCategoryIconComponent } from '@/lib/categoryAppearance';
+import { ErrorState } from '@/components/state/ErrorState';
+import { EmptyState } from '@/components/state/EmptyState';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function CategoriesPage() {
   const { user } = useAuth();
@@ -125,13 +132,13 @@ export default function CategoriesPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Categories</h1>
-          <p className="text-foreground/60">Create and manage your expense categories.</p>
+          <p className="text-muted-foreground">Create and manage your expense categories.</p>
         </div>
         <div className="flex items-center gap-2">
-          <button
+          <Button
+            variant="outline"
             onClick={handleResetToDefaults}
             disabled={isResetting}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg font-medium border border-border hover:bg-muted transition-colors disabled:opacity-50"
             title="Add missing default categories"
           >
             {isResetting ? (
@@ -140,41 +147,74 @@ export default function CategoriesPage() {
               <RefreshCw size={18} />
             )}
             <span className="hidden sm:inline">Reset Defaults</span>
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={handleOpenCreate}
-            className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity whitespace-nowrap"
+            className="whitespace-nowrap"
           >
             <Plus size={18} />
             Add Category
-          </button>
+          </Button>
         </div>
       </div>
 
-      <div className="bg-card text-card-foreground border border-border rounded-xl shadow-sm overflow-hidden">
-        {isLoading ? (
-          <div className="p-12 flex justify-center items-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
-          </div>
-        ) : isError ? (
-          <div className="p-12 text-center">
-            <p className="text-red-500 font-medium">Failed to load categories.</p>
-            <p className="text-foreground/60 text-sm mt-1">Please refresh and try again.</p>
-          </div>
-        ) : categories.length === 0 ? (
-          <div className="p-12 flex flex-col items-center justify-center text-center">
-            <div className="w-16 h-16 bg-foreground/5 rounded-full flex items-center justify-center mb-4 text-foreground/40">
-              <Tags size={32} />
+      {!isLoading && !isError ? (
+        <Alert>
+          <div className="flex items-start gap-3">
+            <RefreshCw className="h-4 w-4 mt-0.5 text-muted-foreground" />
+            <div>
+              <AlertTitle>Default Categories</AlertTitle>
+              <AlertDescription>
+                Use <span className="font-medium">Reset Defaults</span> to add any missing starter categories.
+              </AlertDescription>
             </div>
-            <h3 className="text-lg font-semibold mb-2">No categories yet</h3>
-            <p className="text-foreground/60 max-w-sm mb-6">
-              Add your first category to better organize expenses.
-            </p>
-            <div className="flex gap-3">
-              <button
+          </div>
+        </Alert>
+      ) : null}
+
+      <Card className="overflow-hidden shadow-sm">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-base">All Categories</CardTitle>
+          <CardDescription>{categories.length} configured</CardDescription>
+        </CardHeader>
+        {isLoading ? (
+          <CardContent className="space-y-3">
+            {Array.from({ length: 5 }).map((_, index) => (
+              <div key={`category-skeleton-${index}`} className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-10 w-10 rounded-full" />
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-36" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                </div>
+                <Skeleton className="h-8 w-16 rounded-md" />
+              </div>
+            ))}
+          </CardContent>
+        ) : isError ? (
+          <CardContent>
+            <ErrorState
+              title="Failed to load categories."
+              description="Please refresh and try again."
+              onRetry={() => {
+                void mutate();
+              }}
+            />
+          </CardContent>
+        ) : categories.length === 0 ? (
+          <CardContent className="space-y-4">
+            <EmptyState
+              title="No categories yet"
+              description="Add your first category to better organize expenses."
+              actionLabel="Add Category"
+              onAction={handleOpenCreate}
+            />
+            <div className="flex justify-center">
+              <Button
+                variant="outline"
                 onClick={handleResetToDefaults}
                 disabled={isResetting}
-                className="flex items-center gap-2 bg-primary text-primary-foreground px-6 py-2.5 rounded-lg font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
               >
                 {isResetting ? (
                   <Loader2 size={18} className="animate-spin" />
@@ -182,61 +222,70 @@ export default function CategoriesPage() {
                   <RefreshCw size={18} />
                 )}
                 Add Defaults
-              </button>
-              <button
-                onClick={handleOpenCreate}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-lg font-medium border border-border hover:bg-muted transition-colors"
-              >
-                <Plus size={18} />
-                Custom
-              </button>
+              </Button>
             </div>
-          </div>
+          </CardContent>
         ) : (
           <div className="divide-y divide-border">
             {categories.map((category) => {
               const IconComponent = getCategoryIconComponent(category.icon);
               return (
-                <div key={category.id} className="p-4 sm:p-6 flex items-center justify-between hover:bg-foreground/5 transition-colors group">
+                <div
+                  key={category.id}
+                  className="p-4 sm:p-6 flex items-center justify-between hover:bg-muted/40 transition-colors group"
+                >
                   <div className="flex items-center gap-4">
                     <div
                       className="w-10 h-10 rounded-full flex items-center justify-center"
-                      style={{ backgroundColor: `${category.color}20` }}
+                      style={{ backgroundColor: `${category.color}1f` }}
                     >
                       <IconComponent size={18} style={{ color: category.color }} />
                     </div>
                     <div>
                       <h4 className="font-medium text-foreground">{category.name}</h4>
-                      <div className="flex items-center gap-2 text-sm text-foreground/60">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <span className="w-3 h-3 rounded-full" style={{ backgroundColor: category.color }} />
-                        <span>{category.icon}</span>
+                        <Badge variant="outline" className="font-normal">
+                          {category.icon}
+                        </Badge>
+                        <Badge variant={category.is_default ? 'secondary' : 'outline'}>
+                          {category.is_default ? 'Default' : 'Custom'}
+                        </Badge>
                       </div>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       onClick={() => handleEdit(category)}
-                      className="p-2 text-foreground/60 hover:text-primary hover:bg-primary/10 rounded-full transition-colors"
+                      className="h-8 w-8"
                       title="Edit"
                     >
                       <Edit2 size={16} />
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       onClick={() => handleDelete(category.id)}
                       disabled={deletingId === category.id}
-                      className="p-2 text-foreground/60 hover:text-destructive hover:bg-destructive/10 rounded-full transition-colors disabled:opacity-50"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                       title="Delete"
                     >
-                      {deletingId === category.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-                    </button>
+                      {deletingId === category.id ? (
+                        <Loader2 size={16} className="animate-spin" />
+                      ) : (
+                        <Trash2 size={16} />
+                      )}
+                    </Button>
                   </div>
                 </div>
               );
             })}
           </div>
         )}
-      </div>
+      </Card>
 
       <CategoryModal
         isOpen={isModalOpen}
