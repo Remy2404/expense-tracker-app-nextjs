@@ -103,7 +103,7 @@ export function AiChatWidget() {
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-20 md:bottom-8 right-4 md:right-8 bg-primary text-primary-foreground p-4 rounded-full shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all z-50 flex items-center justify-center"
+          className="fixed bottom-6 md:bottom-8 right-4 md:right-8 bg-primary text-primary-foreground p-4 rounded-full shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all z-50 flex items-center justify-center"
           aria-label="Open AI Assistant"
         >
           <Bot size={24} />
@@ -112,7 +112,7 @@ export function AiChatWidget() {
 
       {/* Chat Window */}
       {isOpen && (
-        <div className="fixed bottom-20 md:bottom-8 right-4 md:right-8 w-[calc(100vw-2rem)] md:w-96 bg-card border border-border rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden max-h-[600px] h-[80vh] md:h-auto">
+        <div className="fixed bottom-6 md:bottom-8 right-4 md:right-8 w-[calc(100vw-2rem)] md:w-96 bg-card border border-border rounded-2xl shadow-2xl z-50 flex flex-col overflow-hidden max-h-[600px] h-[80vh] md:h-auto">
           {/* Header */}
           <div className="bg-primary text-primary-foreground p-4 flex items-center justify-between">
             <div className="flex items-center gap-2">

@@ -5,7 +5,7 @@ import { Plus, RefreshCw, Pause, Play, Edit2, Trash2, Loader2, Calendar, Bell } 
 import { RecurringExpense, RecurringFrequency } from '@/types';
 import { RecurringExpenseModal } from '@/components/RecurringExpenseModal';
 import { useRecurringExpenses, useDeleteRecurringExpense, useToggleRecurringExpense, useCategories } from '@/hooks/useData';
-import { currencyFormat } from '@/lib/utils';
+import { currencyFormat } from '@/lib/billSplit';
 import { format, isBefore, startOfDay, isSameDay } from 'date-fns';
 
 const frequencyLabels: Record<RecurringFrequency, string> = {
