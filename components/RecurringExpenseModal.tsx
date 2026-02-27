@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import { RecurringExpense, RecurringFrequency, Category } from '@/types';
 import { useAddRecurringExpense, useEditRecurringExpense } from '@/hooks/useData';
+import { useForm, useWatch } from 'react-hook-form';
 
 interface RecurringExpenseModalProps {
   isOpen: boolean;
@@ -33,56 +33,53 @@ export function RecurringExpenseModal({ isOpen, onClose, editingItem, categories
   const { trigger: editRecurring, isMutating: isEditing } = useEditRecurringExpense();
 
   const isSaving = isAdding || isEditing;
+  const nowDate = new Date().toISOString().split('T')[0];
 
-  const [amount, setAmount] = useState('');
-  const [categoryId, setCategoryId] = useState('');
-  const [frequency, setFrequency] = useState<RecurringFrequency>('monthly');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [notes, setNotes] = useState('');
-  const [notificationEnabled, setNotificationEnabled] = useState(true);
-  const [notificationDaysBefore, setNotificationDaysBefore] = useState(1);
+  type RecurringForm = {
+    amount: string;
+    categoryId: string;
+    frequency: RecurringFrequency;
+    startDate: string;
+    endDate: string;
+    notes: string;
+    notificationEnabled: boolean;
+    notificationDaysBefore: string;
+  };
 
-  useEffect(() => {
-    if (editingItem) {
-      setAmount(editingItem.amount.toString());
-      setCategoryId(editingItem.category_id);
-      setFrequency(editingItem.frequency);
-      setStartDate(new Date(editingItem.start_date).toISOString().split('T')[0]);
-      setEndDate(editingItem.end_date ? new Date(editingItem.end_date).toISOString().split('T')[0] : '');
-      setNotes(editingItem.notes || '');
-      setNotificationEnabled(editingItem.notification_enabled);
-      setNotificationDaysBefore(editingItem.notification_days_before);
-    } else {
-      setAmount('');
-      setCategoryId(categories[0]?.id || '');
-      setFrequency('monthly');
-      setStartDate(new Date().toISOString().split('T')[0]);
-      setEndDate('');
-      setNotes('');
-      setNotificationEnabled(true);
-      setNotificationDaysBefore(1);
-    }
-  }, [editingItem, categories, isOpen]);
+  const { register, handleSubmit, setValue, control } = useForm<RecurringForm>({
+    values: {
+      amount: editingItem ? editingItem.amount.toString() : '',
+      categoryId: editingItem ? editingItem.category_id : categories[0]?.id || '',
+      frequency: editingItem ? editingItem.frequency : 'monthly',
+      startDate: editingItem ? new Date(editingItem.start_date).toISOString().split('T')[0] : nowDate,
+      endDate: editingItem?.end_date ? new Date(editingItem.end_date).toISOString().split('T')[0] : '',
+      notes: editingItem?.notes || '',
+      notificationEnabled: editingItem ? editingItem.notification_enabled : true,
+      notificationDaysBefore: String(editingItem ? editingItem.notification_days_before : 1),
+    },
+  });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const notificationEnabled = useWatch({
+    control,
+    name: 'notificationEnabled',
+  });
 
-    if (!amount || !categoryId || !startDate) {
+  const submitRecurring = async (data: RecurringForm) => {
+    if (!data.amount || !data.categoryId || !data.startDate) {
       alert('Please fill in all required fields');
       return;
     }
 
     const payload = {
-      amount: parseFloat(amount),
-      category_id: categoryId,
-      frequency,
-      start_date: new Date(startDate).toISOString(),
-      end_date: endDate ? new Date(endDate).toISOString() : undefined,
-      notes: notes || undefined,
-      notification_enabled: notificationEnabled,
-      notification_days_before: notificationDaysBefore,
-      next_due_date: new Date(startDate).toISOString(),
+      amount: parseFloat(data.amount),
+      category_id: data.categoryId,
+      frequency: data.frequency,
+      start_date: new Date(data.startDate).toISOString(),
+      end_date: data.endDate ? new Date(data.endDate).toISOString() : undefined,
+      notes: data.notes || undefined,
+      notification_enabled: data.notificationEnabled,
+      notification_days_before: parseInt(data.notificationDaysBefore, 10),
+      next_due_date: new Date(data.startDate).toISOString(),
       is_active: true,
     };
 
@@ -108,15 +105,14 @@ export function RecurringExpenseModal({ isOpen, onClose, editingItem, categories
           {editingItem ? 'Edit Recurring Expense' : 'Add Recurring Expense'}
         </h3>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit(submitRecurring)} className="space-y-4">
           <div>
             <label className="text-sm font-medium">Amount *</label>
             <input
               type="number"
               step="0.01"
               min="0"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              {...register('amount')}
               placeholder="0.00"
               className="mt-1 w-full h-10 px-3 border border-border rounded-lg bg-background text-foreground"
               required
@@ -126,8 +122,7 @@ export function RecurringExpenseModal({ isOpen, onClose, editingItem, categories
           <div>
             <label className="text-sm font-medium">Category *</label>
             <select
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
+              {...register('categoryId')}
               className="mt-1 w-full h-10 px-3 border border-border rounded-lg bg-background text-foreground"
               required
             >
@@ -143,8 +138,7 @@ export function RecurringExpenseModal({ isOpen, onClose, editingItem, categories
           <div>
             <label className="text-sm font-medium">Frequency *</label>
             <select
-              value={frequency}
-              onChange={(e) => setFrequency(e.target.value as RecurringFrequency)}
+              {...register('frequency')}
               className="mt-1 w-full h-10 px-3 border border-border rounded-lg bg-background text-foreground"
               required
             >
@@ -161,8 +155,7 @@ export function RecurringExpenseModal({ isOpen, onClose, editingItem, categories
               <label className="text-sm font-medium">Start Date *</label>
               <input
                 type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                {...register('startDate')}
                 className="mt-1 w-full h-10 px-3 border border-border rounded-lg bg-background text-foreground"
                 required
               />
@@ -171,8 +164,7 @@ export function RecurringExpenseModal({ isOpen, onClose, editingItem, categories
               <label className="text-sm font-medium">End Date</label>
               <input
                 type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
+                {...register('endDate')}
                 className="mt-1 w-full h-10 px-3 border border-border rounded-lg bg-background text-foreground"
               />
             </div>
@@ -181,8 +173,7 @@ export function RecurringExpenseModal({ isOpen, onClose, editingItem, categories
           <div>
             <label className="text-sm font-medium">Notes</label>
             <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
+              {...register('notes')}
               placeholder="Optional notes..."
               rows={2}
               className="mt-1 w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground resize-none"
@@ -194,7 +185,7 @@ export function RecurringExpenseModal({ isOpen, onClose, editingItem, categories
               <label className="text-sm font-medium">Enable Reminders</label>
               <button
                 type="button"
-                onClick={() => setNotificationEnabled(!notificationEnabled)}
+                onClick={() => setValue('notificationEnabled', !notificationEnabled, { shouldDirty: true })}
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                   notificationEnabled ? 'bg-primary' : 'bg-muted'
                 }`}
@@ -211,8 +202,7 @@ export function RecurringExpenseModal({ isOpen, onClose, editingItem, categories
               <div>
                 <label className="text-sm font-medium">Remind me</label>
                 <select
-                  value={notificationDaysBefore}
-                  onChange={(e) => setNotificationDaysBefore(parseInt(e.target.value))}
+                  {...register('notificationDaysBefore')}
                   className="mt-1 w-full h-10 px-3 border border-border rounded-lg bg-background text-foreground"
                 >
                   {notificationDaysOptions.map((opt) => (

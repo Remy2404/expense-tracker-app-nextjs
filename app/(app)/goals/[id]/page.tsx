@@ -4,7 +4,6 @@ import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Plus, Target, Edit2, Trash2, Loader2, ArrowLeft, TrendingUp, TrendingDown, Wallet } from 'lucide-react';
-import { Goal } from '@/types/goals';
 import { GoalModal } from '@/components/GoalModal';
 import { GoalTransactionModal } from '@/components/GoalTransactionModal';
 import { useGoals, useDeleteGoal, useEditGoal, useUpdateGoalBalance, useGoalTransactions, useAddGoalTransaction } from '@/hooks/useData';
@@ -15,8 +14,8 @@ export default function GoalDetailPage() {
   const params = useParams();
   const goalId = params?.id as string;
 
-  const { goals, isLoading, isError } = useGoals();
-  const { trigger: deleteGoal, isMutating: isDeleting } = useDeleteGoal();
+  const { goals, isLoading } = useGoals();
+  const { trigger: deleteGoal } = useDeleteGoal();
   const { trigger: editGoal, isMutating: isEditing } = useEditGoal();
   const { trigger: updateBalance, isMutating: isUpdating } = useUpdateGoalBalance();
   const { trigger: addTransaction, isMutating: isAddingTransaction } = useAddGoalTransaction();

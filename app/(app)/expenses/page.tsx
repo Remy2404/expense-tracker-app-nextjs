@@ -5,7 +5,8 @@ import { Plus, Filter, Receipt, Edit2, Trash2, Loader2, Download, FileText } fro
 import { useExpenses, useCategories, useDeleteExpense } from '@/hooks/useData';
 import { AddExpenseModal } from '@/components/AddExpenseModal';
 import { Expense } from '@/types';
-import { buildExpenseCsv, downloadFile, exportExpensesAsPdf } from '@/lib/export';
+import { buildExpenseCsv, downloadFile } from '@/lib/export';
+import { exportExpensesAsPdf } from '@/lib/export-pdf';
 import { getCurrencySymbol } from '@/lib/currencies';
 
 type ExportRange = 'all' | 'current-month';
@@ -81,7 +82,7 @@ export default function ExpensesPage() {
     setExportError(null);
     setIsExporting('pdf');
     try {
-      exportExpensesAsPdf(exportableExpenses, categories);
+      await exportExpensesAsPdf(exportableExpenses, categories, exportRange);
     } catch (error) {
       setExportError(error instanceof Error ? error.message : 'Failed to export PDF.');
     } finally {

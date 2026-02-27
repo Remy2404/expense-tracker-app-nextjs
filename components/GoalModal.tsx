@@ -8,7 +8,7 @@ import {
   Sparkles, Sun, Moon, Star, Zap, Trophy, Flag, Compass, Search
 } from 'lucide-react';
 import { Goal } from '@/types/goals';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 
@@ -101,8 +101,6 @@ interface GoalModalProps {
 
 export function GoalModal({ isOpen, onClose, onSubmit, isSaving, goalToEdit }: GoalModalProps) {
   const isEditMode = !!goalToEdit;
-  const [selectedColor, setSelectedColor] = useState('#10B981');
-  const [selectedIcon, setSelectedIcon] = useState('target');
   const [iconSearch, setIconSearch] = useState('');
 
   const {
@@ -110,6 +108,7 @@ export function GoalModal({ isOpen, onClose, onSubmit, isSaving, goalToEdit }: G
     handleSubmit,
     reset,
     setValue,
+    control,
     formState: { errors },
   } = useForm<GoalFormData>({
     resolver: yupResolver(goalSchema),
@@ -139,15 +138,16 @@ export function GoalModal({ isOpen, onClose, onSubmit, isSaving, goalToEdit }: G
     });
   }, [iconSearch]);
 
+  const selectedColor = useWatch({ control, name: 'color' }) || '#10B981';
+  const selectedIcon = useWatch({ control, name: 'icon' }) || 'target';
+  const goalName = useWatch({ control, name: 'name' }) || 'Goal Name';
+
   useEffect(() => {
     if (!isOpen) return;
 
     if (goalToEdit) {
       const color = goalToEdit.color || '#10B981';
       const icon = goalToEdit.icon || 'target';
-      setSelectedColor(color);
-      setSelectedIcon(icon);
-      setIconSearch('');
       reset({
         name: goalToEdit.name,
         target_amount: goalToEdit.target_amount,
@@ -160,9 +160,6 @@ export function GoalModal({ isOpen, onClose, onSubmit, isSaving, goalToEdit }: G
       return;
     }
 
-    setSelectedColor('#10B981');
-    setSelectedIcon('target');
-    setIconSearch('');
     reset({
       name: '',
       target_amount: 0,
@@ -175,12 +172,10 @@ export function GoalModal({ isOpen, onClose, onSubmit, isSaving, goalToEdit }: G
   }, [isOpen, goalToEdit, reset]);
 
   const handleColorSelect = (color: string) => {
-    setSelectedColor(color);
     setValue('color', color);
   };
 
   const handleIconSelect = (icon: string) => {
-    setSelectedIcon(icon);
     setValue('icon', icon);
   };
 
@@ -208,7 +203,7 @@ export function GoalModal({ isOpen, onClose, onSubmit, isSaving, goalToEdit }: G
               <IconComponent size={24} style={{ color: selectedColor }} />
             </div>
             <div>
-              <p className="font-semibold">{register('name').value || 'Goal Name'}</p>
+              <p className="font-semibold">{goalName}</p>
               <p className="text-sm text-foreground/60">Preview</p>
             </div>
           </div>
@@ -320,10 +315,7 @@ export function GoalModal({ isOpen, onClose, onSubmit, isSaving, goalToEdit }: G
                     className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
                       isSelected ? 'ring-2 ring-offset-2 ring-offset-background' : ''
                     }`}
-                    style={{
-                      backgroundColor: color.value,
-                      ringColor: isSelected ? color.value : undefined,
-                    }}
+                    style={{ backgroundColor: color.value }}
                     title={color.name}
                   >
                     {isSelected && (

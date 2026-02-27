@@ -17,9 +17,9 @@ const frequencyLabels: Record<RecurringFrequency, string> = {
 };
 
 export default function RecurringExpensesPage() {
-  const { recurringExpenses, isLoading, mutate: mutateRecurring } = useRecurringExpenses();
+  const { recurringExpenses, isLoading } = useRecurringExpenses();
   const { categories } = useCategories();
-  const { trigger: deleteRecurring, isMutating: isDeleting } = useDeleteRecurringExpense();
+  const { trigger: deleteRecurring } = useDeleteRecurringExpense();
   const { trigger: toggleRecurring, isMutating: isToggling } = useToggleRecurringExpense();
 
   const [isModalOpen, setIsModalOpen] = useState(false);

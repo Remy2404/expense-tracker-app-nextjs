@@ -215,10 +215,7 @@ export function CategoryModal({
                     className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
                       isSelected ? 'ring-2 ring-offset-2 ring-offset-background' : ''
                     }`}
-                    style={{
-                      backgroundColor: color.value,
-                      ringColor: isSelected ? color.value : undefined,
-                    }}
+                    style={{ backgroundColor: color.value }}
                     title={color.name}
                   >
                     {isSelected ? (

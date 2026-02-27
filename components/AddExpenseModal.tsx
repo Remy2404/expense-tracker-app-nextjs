@@ -5,7 +5,7 @@ import { X, Sparkles, Loader2 } from 'lucide-react';
 import { useAiParse } from '@/hooks/useAi';
 import { useAddExpense, useEditExpense, useCategories } from '@/hooks/useData';
 import { Expense } from '@/types';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { CURRENCIES, getCurrencySymbol } from '@/lib/currencies';
@@ -31,7 +31,6 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [parsedData, setParsedData] = useState<any>(null);
   const [aiParseError, setAiParseError] = useState(false);
-  const [selectedCurrency, setSelectedCurrency] = useState('USD');
   
   const { categories } = useCategories();
   const { trigger: parseAi, isMutating: isParsing } = useAiParse();
@@ -45,6 +44,7 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
     register,
     handleSubmit,
     setValue,
+    control,
     reset,
     formState: { errors },
   } = useForm<ExpenseFormData>({
@@ -65,12 +65,14 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
         setValue('date', !isNaN(d.getTime()) ? d.toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
         setValue('category_id', expenseToEdit.category_id || '');
         setValue('currency', expenseToEdit.currency || 'USD');
-        setSelectedCurrency(expenseToEdit.currency || 'USD');
-      } else {
-        setSelectedCurrency('USD');
       }
     }
   }, [isOpen, expenseToEdit, setValue]);
+
+  const selectedCurrency = useWatch({
+    control,
+    name: 'currency',
+  }) || 'USD';
 
   if (!isOpen) return null;
 
@@ -104,9 +106,9 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
     try {
       const expenseData = {
         amount: Number(data.amount),
-        currency: selectedCurrency,
-        original_amount: selectedCurrency !== 'USD' ? Number(data.amount) : undefined,
-        exchange_rate: selectedCurrency !== 'USD' ? 1 : undefined,
+        currency: data.currency || 'USD',
+        original_amount: (data.currency || 'USD') !== 'USD' ? Number(data.amount) : undefined,
+        exchange_rate: (data.currency || 'USD') !== 'USD' ? 1 : undefined,
         notes: data.note || 'Expense',
         date: data.date ? new Date(data.date).toISOString() : new Date().toISOString(),
         category_id: data.category_id || (categories[0]?.id as string) || '',
@@ -128,7 +130,6 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
     setNaturalLanguage('');
     setParsedData(null);
     setAiParseError(false);
-    setSelectedCurrency('USD');
     reset({
       amount: undefined,
       currency: 'USD',
@@ -215,7 +216,7 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
                     </div>
                     <select
                       value={selectedCurrency}
-                      onChange={(e) => setSelectedCurrency(e.target.value)}
+                      onChange={(e) => setValue('currency', e.target.value, { shouldDirty: true })}
                       className="w-24 h-10 px-2 bg-background text-foreground border border-foreground/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm"
                     >
                       {CURRENCIES.map((c) => (

@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Budget } from '@/types';
 import { useAddBudget, useEditBudget } from '@/hooks/useData';
+import { useForm } from 'react-hook-form';
 
 interface BudgetModalProps {
   isOpen: boolean;
@@ -16,34 +16,27 @@ export function BudgetModal({ isOpen, onClose, editingBudget }: BudgetModalProps
   const { trigger: editBudget, isMutating: isEditing } = useEditBudget();
 
   const isSaving = isAdding || isEditing;
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const initialMonth = editingBudget?.month || currentMonth;
+  const initialTotalAmount = editingBudget ? editingBudget.total_amount.toString() : '';
 
-  const [month, setMonth] = useState('');
-  const [totalAmount, setTotalAmount] = useState('');
+  const { register, handleSubmit } = useForm<{ month: string; totalAmount: string }>({
+    values: {
+      month: initialMonth,
+      totalAmount: initialTotalAmount,
+    },
+  });
 
-  useEffect(() => {
-    if (editingBudget) {
-      setMonth(editingBudget.month);
-      setTotalAmount(editingBudget.total_amount.toString());
-    } else {
-      // Default to current month
-      const now = new Date();
-      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-      setMonth(currentMonth);
-      setTotalAmount('');
-    }
-  }, [editingBudget, isOpen]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!month || !totalAmount) {
+  const submitBudget = async (data: { month: string; totalAmount: string }) => {
+    if (!data.month || !data.totalAmount) {
       alert('Please fill in all required fields');
       return;
     }
 
     const payload = {
-      month,
-      total_amount: parseFloat(totalAmount),
+      month: data.month,
+      total_amount: parseFloat(data.totalAmount),
     };
 
     try {
@@ -68,13 +61,12 @@ export function BudgetModal({ isOpen, onClose, editingBudget }: BudgetModalProps
           {editingBudget ? 'Edit Budget' : 'Create Budget'}
         </h3>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit(submitBudget)} className="space-y-4">
           <div>
             <label className="text-sm font-medium">Month *</label>
             <input
               type="month"
-              value={month}
-              onChange={(e) => setMonth(e.target.value)}
+              {...register('month')}
               className="mt-1 w-full h-10 px-3 border border-border rounded-lg bg-transparent"
               required
             />
@@ -86,8 +78,7 @@ export function BudgetModal({ isOpen, onClose, editingBudget }: BudgetModalProps
               type="number"
               step="0.01"
               min="0"
-              value={totalAmount}
-              onChange={(e) => setTotalAmount(e.target.value)}
+              {...register('totalAmount')}
               placeholder="0.00"
               className="mt-1 w-full h-10 px-3 border border-border rounded-lg bg-transparent"
               required
