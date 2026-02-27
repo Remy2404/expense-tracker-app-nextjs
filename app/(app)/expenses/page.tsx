@@ -10,6 +10,14 @@ import { exportExpensesAsPdf } from '@/lib/export-pdf';
 import { getCurrencySymbol } from '@/lib/currencies';
 
 type ExportRange = 'all' | 'current-month';
+type ExpenseFilters = {
+  query: string;
+  categoryId: string;
+  dateFrom: string;
+  dateTo: string;
+  minAmount: string;
+  maxAmount: string;
+};
 
 export default function ExpensesPage() {
   const { expenses, isLoading, isError } = useExpenses();
@@ -22,16 +30,52 @@ export default function ExpensesPage() {
   const [exportRange, setExportRange] = useState<ExportRange>('all');
   const [isExporting, setIsExporting] = useState<'csv' | 'pdf' | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [filters, setFilters] = useState<ExpenseFilters>({
+    query: '',
+    categoryId: '',
+    dateFrom: '',
+    dateTo: '',
+    minAmount: '',
+    maxAmount: '',
+  });
 
   const currentMonth = new Date().toISOString().slice(0, 7);
 
-  const exportableExpenses = useMemo(() => {
-    if (exportRange === 'all') return expenses;
+  const filteredExpenses = useMemo(() => {
     return expenses.filter((expense) => {
+      const expenseDate = new Date(expense.date);
+      const searchSource = `${expense.notes || expense.note || ''} ${expense.merchant || ''}`.toLowerCase();
+      const query = filters.query.trim().toLowerCase();
+
+      if (query && !searchSource.includes(query)) return false;
+      if (filters.categoryId && expense.category_id !== filters.categoryId) return false;
+
+      if (filters.dateFrom) {
+        const from = new Date(filters.dateFrom);
+        if (expenseDate < from) return false;
+      }
+
+      if (filters.dateTo) {
+        const to = new Date(filters.dateTo);
+        to.setHours(23, 59, 59, 999);
+        if (expenseDate > to) return false;
+      }
+
+      if (filters.minAmount && expense.amount < Number(filters.minAmount)) return false;
+      if (filters.maxAmount && expense.amount > Number(filters.maxAmount)) return false;
+
+      return true;
+    });
+  }, [expenses, filters]);
+
+  const exportableExpenses = useMemo(() => {
+    if (exportRange === 'all') return filteredExpenses;
+    return filteredExpenses.filter((expense) => {
       const expenseDate = typeof expense.date === 'string' ? expense.date : expense.date.toISOString();
       return expenseDate.startsWith(currentMonth);
     });
-  }, [currentMonth, expenses, exportRange]);
+  }, [currentMonth, filteredExpenses, exportRange]);
 
   const getCategoryName = (categoryId: string | undefined) => {
     if (!categoryId) return 'Uncategorized';
@@ -60,6 +104,21 @@ export default function ExpensesPage() {
   const handleCloseModal = () => {
     setIsAddModalOpen(false);
     setTimeout(() => setExpenseToEdit(null), 200);
+  };
+
+  const updateFilter = (key: keyof ExpenseFilters, value: string) => {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      query: '',
+      categoryId: '',
+      dateFrom: '',
+      dateTo: '',
+      minAmount: '',
+      maxAmount: '',
+    });
   };
 
   const handleExportCsv = async () => {
@@ -98,7 +157,10 @@ export default function ExpensesPage() {
           <p className="text-foreground/60">Manage and track all your transactions.</p>
         </div>
         <div className="flex items-center gap-3 w-full sm:w-auto flex-wrap">
-          <button className="flex items-center justify-center gap-2 border border-border bg-background px-4 py-2 rounded-lg font-medium hover:bg-foreground/5 transition-colors flex-1 sm:flex-none">
+          <button
+            onClick={() => setIsFilterOpen((prev) => !prev)}
+            className="flex items-center justify-center gap-2 border border-border bg-background px-4 py-2 rounded-lg font-medium hover:bg-foreground/5 transition-colors flex-1 sm:flex-none"
+          >
             <Filter size={18} />
             Filter
           </button>
@@ -150,6 +212,73 @@ export default function ExpensesPage() {
         </div>
       )}
 
+      {isFilterOpen && (
+        <div className="bg-card text-card-foreground border border-border rounded-xl p-4 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <input
+              type="text"
+              value={filters.query}
+              onChange={(event) => updateFilter('query', event.target.value)}
+              placeholder="Search merchant or note"
+              className="h-10 px-3 border border-border rounded-lg bg-background"
+            />
+
+            <select
+              value={filters.categoryId}
+              onChange={(event) => updateFilter('categoryId', event.target.value)}
+              className="h-10 px-3 border border-border rounded-lg bg-background"
+            >
+              <option value="">All categories</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+
+            <input
+              type="number"
+              value={filters.minAmount}
+              onChange={(event) => updateFilter('minAmount', event.target.value)}
+              placeholder="Min amount"
+              className="h-10 px-3 border border-border rounded-lg bg-background"
+            />
+
+            <input
+              type="number"
+              value={filters.maxAmount}
+              onChange={(event) => updateFilter('maxAmount', event.target.value)}
+              placeholder="Max amount"
+              className="h-10 px-3 border border-border rounded-lg bg-background"
+            />
+
+            <input
+              type="date"
+              value={filters.dateFrom}
+              onChange={(event) => updateFilter('dateFrom', event.target.value)}
+              className="h-10 px-3 border border-border rounded-lg bg-background"
+            />
+
+            <input
+              type="date"
+              value={filters.dateTo}
+              onChange={(event) => updateFilter('dateTo', event.target.value)}
+              className="h-10 px-3 border border-border rounded-lg bg-background"
+            />
+          </div>
+
+          <div className="flex justify-between items-center">
+            <p className="text-sm text-foreground/60">{filteredExpenses.length} matching expenses</p>
+            <button
+              onClick={clearFilters}
+              className="text-sm px-3 py-1.5 border border-border rounded-lg hover:bg-foreground/5"
+            >
+              Clear filters
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="bg-card text-card-foreground border border-border rounded-xl shadow-sm overflow-hidden">
         {isLoading ? (
           <div className="p-12 flex justify-center items-center">
@@ -160,14 +289,14 @@ export default function ExpensesPage() {
             <h3 className="text-lg font-semibold mb-2">Failed to load expenses</h3>
             <p className="text-foreground/60">Please refresh and try again.</p>
           </div>
-        ) : expenses.length === 0 ? (
+        ) : filteredExpenses.length === 0 ? (
           <div className="p-12 flex flex-col items-center justify-center text-center">
             <div className="w-16 h-16 bg-foreground/5 rounded-full flex items-center justify-center mb-4 text-foreground/40">
               <Receipt size={32} />
             </div>
-            <h3 className="text-lg font-semibold mb-2">No expenses yet</h3>
+            <h3 className="text-lg font-semibold mb-2">No matching expenses</h3>
             <p className="text-foreground/60 max-w-sm mb-6">
-              Get started by adding your first expense to track where your money goes.
+              Try adjusting your filters or add a new expense.
             </p>
             <button
               onClick={() => {
@@ -181,7 +310,7 @@ export default function ExpensesPage() {
           </div>
         ) : (
           <div className="divide-y divide-border">
-            {expenses.map((expense) => (
+            {filteredExpenses.map((expense) => (
               <div
                 key={expense.id}
                 className="p-4 sm:p-6 flex items-center justify-between hover:bg-foreground/5 transition-colors group"
