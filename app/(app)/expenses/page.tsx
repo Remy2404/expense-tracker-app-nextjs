@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { ReadonlyURLSearchParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Plus, Filter, Receipt, Edit2, Trash2, Loader2, Download, FileText } from 'lucide-react';
 import { useExpenses, useCategories, useDeleteExpense } from '@/hooks/useData';
 import { AddExpenseModal } from '@/components/AddExpenseModal';
@@ -19,7 +20,36 @@ type ExpenseFilters = {
   maxAmount: string;
 };
 
+const EMPTY_FILTERS: ExpenseFilters = {
+  query: '',
+  categoryId: '',
+  dateFrom: '',
+  dateTo: '',
+  minAmount: '',
+  maxAmount: '',
+};
+
+const getFiltersFromSearchParams = (searchParams: URLSearchParams | ReadonlyURLSearchParams): ExpenseFilters => ({
+  query: searchParams.get('q') || '',
+  categoryId: searchParams.get('categoryId') || '',
+  dateFrom: searchParams.get('dateFrom') || '',
+  dateTo: searchParams.get('dateTo') || '',
+  minAmount: searchParams.get('minAmount') || '',
+  maxAmount: searchParams.get('maxAmount') || '',
+});
+
+const filtersEqual = (a: ExpenseFilters, b: ExpenseFilters): boolean =>
+  a.query === b.query &&
+  a.categoryId === b.categoryId &&
+  a.dateFrom === b.dateFrom &&
+  a.dateTo === b.dateTo &&
+  a.minAmount === b.minAmount &&
+  a.maxAmount === b.maxAmount;
+
 export default function ExpensesPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { expenses, isLoading, isError } = useExpenses();
   const { categories } = useCategories();
   const { trigger: deleteExpense } = useDeleteExpense();
@@ -31,14 +61,9 @@ export default function ExpensesPage() {
   const [isExporting, setIsExporting] = useState<'csv' | 'pdf' | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [filters, setFilters] = useState<ExpenseFilters>({
-    query: '',
-    categoryId: '',
-    dateFrom: '',
-    dateTo: '',
-    minAmount: '',
-    maxAmount: '',
-  });
+  const [filters, setFilters] = useState<ExpenseFilters>(() =>
+    getFiltersFromSearchParams(new URLSearchParams(searchParams.toString()))
+  );
 
   const currentMonth = new Date().toISOString().slice(0, 7);
 
@@ -111,15 +136,29 @@ export default function ExpensesPage() {
   };
 
   const clearFilters = () => {
-    setFilters({
-      query: '',
-      categoryId: '',
-      dateFrom: '',
-      dateTo: '',
-      minAmount: '',
-      maxAmount: '',
-    });
+    setFilters(EMPTY_FILTERS);
   };
+
+  useEffect(() => {
+    const urlFilters = getFiltersFromSearchParams(searchParams);
+    setFilters((prev) => (filtersEqual(prev, urlFilters) ? prev : urlFilters));
+  }, [searchParams]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (filters.query) params.set('q', filters.query); else params.delete('q');
+    if (filters.categoryId) params.set('categoryId', filters.categoryId); else params.delete('categoryId');
+    if (filters.dateFrom) params.set('dateFrom', filters.dateFrom); else params.delete('dateFrom');
+    if (filters.dateTo) params.set('dateTo', filters.dateTo); else params.delete('dateTo');
+    if (filters.minAmount) params.set('minAmount', filters.minAmount); else params.delete('minAmount');
+    if (filters.maxAmount) params.set('maxAmount', filters.maxAmount); else params.delete('maxAmount');
+
+    const currentQuery = searchParams.toString();
+    const nextQuery = params.toString();
+    if (currentQuery !== nextQuery) {
+      router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
+    }
+  }, [filters, pathname, router, searchParams]);
 
   const handleExportCsv = async () => {
     if (exportableExpenses.length === 0) return;
