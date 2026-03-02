@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { X, Loader2, Search } from 'lucide-react';
-import { Category } from '@/types';
+import { Category, CategoryType } from '@/types';
 import { useForm, useWatch } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
@@ -11,11 +11,13 @@ import {
   CATEGORY_ICON_DATA,
   CATEGORY_ICON_OPTIONS,
 } from '@/lib/categoryAppearance';
+import { getCategoryType } from '@/lib/transactions';
 
 const categorySchema = yup
   .object({
     name: yup.string().trim().min(2, 'Name must be at least 2 characters').required('Name is required'),
     icon: yup.string().trim().required('Icon is required'),
+    type: yup.mixed<CategoryType>().oneOf(['expense', 'income']).required('Category type is required'),
     color: yup
       .string()
       .trim()
@@ -56,6 +58,7 @@ export function CategoryModal({
     defaultValues: {
       name: '',
       icon: 'tag',
+      type: 'expense',
       color: '#3B82F6',
     },
   });
@@ -72,6 +75,10 @@ export function CategoryModal({
     control,
     name: 'icon',
   }) || 'tag';
+  const selectedType = useWatch({
+    control,
+    name: 'type',
+  }) || 'expense';
 
   const filteredIcons = useMemo(() => {
     if (!iconSearch.trim()) return CATEGORY_ICON_OPTIONS;
@@ -93,6 +100,7 @@ export function CategoryModal({
       reset({
         name: categoryToEdit.name,
         icon,
+        type: getCategoryType(categoryToEdit),
         color,
       });
       return;
@@ -101,6 +109,7 @@ export function CategoryModal({
     reset({
       name: '',
       icon: 'tag',
+      type: 'expense',
       color: '#3B82F6',
     });
   }, [isOpen, categoryToEdit, reset]);
@@ -154,6 +163,31 @@ export function CategoryModal({
               className={`w-full h-10 px-3 bg-transparent border ${errors.name ? 'border-red-500' : 'border-foreground/20'} rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50`}
             />
             {errors.name && <p className="text-xs text-red-500">{errors.name.message}</p>}
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Type</label>
+            <div className="grid grid-cols-2 gap-2">
+              {(['expense', 'income'] as CategoryType[]).map((value) => {
+                const isActive = selectedType === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setValue('type', value, { shouldValidate: true })}
+                    className={`h-10 rounded-lg border text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-foreground/20 hover:bg-foreground/5'
+                    }`}
+                  >
+                    {value === 'expense' ? 'Expense' : 'Income'}
+                  </button>
+                );
+              })}
+            </div>
+            <input type="hidden" {...register('type')} />
+            {errors.type && <p className="text-xs text-red-500">{errors.type.message}</p>}
           </div>
 
           <div className="space-y-2">

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo } from 'react';
 import { useBudgets, useExpenses } from '@/hooks/useData';
+import { isExpenseTransaction } from '@/lib/transactions';
 import { useNotificationStore } from '@/store/notificationStore';
 
 const BUDGET_ALERT_THRESHOLDS = [80, 100] as const;
@@ -17,7 +18,7 @@ export function useNotifications() {
     return expenses
       .filter((expense) => {
         const rawDate = typeof expense.date === 'string' ? expense.date : expense.date.toISOString();
-        return rawDate.startsWith(currentMonth);
+        return rawDate.startsWith(currentMonth) && isExpenseTransaction(expense);
       })
       .reduce((sum, expense) => sum + expense.amount, 0);
   }, [expenses, currentMonth]);

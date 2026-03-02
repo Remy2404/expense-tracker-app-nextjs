@@ -88,7 +88,7 @@ describe('ExpensesPage', () => {
 
     expect(screen.getByPlaceholderText('Search merchant or note')).toHaveValue('coffee');
     expect(screen.getByPlaceholderText('Min amount')).toHaveValue(10);
-    expect(screen.getByText('1 matching expenses')).toBeInTheDocument();
+    expect(screen.getByText('1 matching transactions')).toBeInTheDocument();
   });
 
   it('persists query filter to URL with router.replace', async () => {
@@ -122,11 +122,11 @@ describe('ExpensesPage', () => {
     });
   });
 
-  it('opens add expense modal when user clicks add', async () => {
+  it('opens add expense modal when user clicks add transaction', async () => {
     const user = userEvent.setup();
     render(<ExpensesPage />);
 
-    await user.click(screen.getByRole('button', { name: 'Add' }));
+    await user.click(screen.getByRole('button', { name: 'Add Transaction' }));
 
     expect(screen.getByTestId('add-expense-modal')).toBeInTheDocument();
   });

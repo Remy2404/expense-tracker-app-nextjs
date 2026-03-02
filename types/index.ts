@@ -1,6 +1,10 @@
+export type TransactionType = 'expense' | 'income';
+export type CategoryType = TransactionType;
+
 export interface Expense {
   id: string;
   amount: number;
+  transaction_type?: TransactionType;
   category_id?: string;
   date: Date | string; // Handle both parsed and serialized
   notes?: string;
@@ -31,6 +35,8 @@ export interface Category {
   name: string;
   icon: string;
   color: string;
+  type?: CategoryType;
+  category_type?: CategoryType;
   is_default?: boolean;
   sort_order?: number;
   sync_status?: 'pending' | 'synced';

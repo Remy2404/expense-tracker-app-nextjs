@@ -1,11 +1,11 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { Loader2, Sparkles, X, TriangleAlert, CheckCircle2 } from 'lucide-react';
 import { useAiParse } from '@/hooks/useAi';
 import { useAddExpense, useEditExpense, useCategories } from '@/hooks/useData';
-import { Expense } from '@/types';
+import { Expense, TransactionType } from '@/types';
 import { AiParseResponse } from '@/types/ai';
 import { useForm, useWatch } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
@@ -16,10 +16,15 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getCategoryType, getTransactionType } from '@/lib/transactions';
 import { cn } from '@/lib/utils';
 
 const expenseSchema = yup
   .object({
+    transaction_type: yup
+      .mixed<TransactionType>()
+      .oneOf(['expense', 'income'])
+      .required('Transaction type is required'),
     amount: yup.number().typeError('Amount must be a number').positive('Amount must be positive').required('Amount is required'),
     currency: yup.string().default('USD'),
     date: yup.string().required('Date is required'),
@@ -38,6 +43,10 @@ interface AddExpenseModalProps {
 }
 
 const todayDate = () => new Date().toISOString().split('T')[0];
+const transactionTypeOptions: Array<{ value: TransactionType; label: string }> = [
+  { value: 'expense', label: 'Expense' },
+  { value: 'income', label: 'Income' },
+];
 
 const toDateInputValue = (value: string | null) => {
   if (!value) return todayDate();
@@ -78,6 +87,7 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
   } = useForm<ExpenseFormData>({
     resolver: yupResolver(expenseSchema),
     defaultValues: {
+      transaction_type: 'expense',
       amount: undefined,
       currency: 'USD',
       date: todayDate(),
@@ -90,6 +100,18 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
     control,
     name: 'currency',
   }) || 'USD';
+  const selectedTransactionType = useWatch({
+    control,
+    name: 'transaction_type',
+  }) || 'expense';
+  const selectedCategoryId = useWatch({
+    control,
+    name: 'category_id',
+  }) || '';
+
+  const categoriesForType = useMemo(() => {
+    return categories.filter((category) => getCategoryType(category) === selectedTransactionType);
+  }, [categories, selectedTransactionType]);
 
   useEffect(() => {
     if (!isOpen || !expenseToEdit) return;
@@ -104,7 +126,17 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
     );
     setValue('category_id', expenseToEdit.category_id || '');
     setValue('currency', expenseToEdit.currency || 'USD');
+    setValue('transaction_type', getTransactionType(expenseToEdit));
   }, [expenseToEdit, isOpen, setValue]);
+
+  useEffect(() => {
+    if (!selectedCategoryId) return;
+    const selectedCategory = categories.find((category) => category.id === selectedCategoryId);
+    if (!selectedCategory) return;
+    if (getCategoryType(selectedCategory) !== selectedTransactionType) {
+      setValue('category_id', '', { shouldValidate: true, shouldDirty: true });
+    }
+  }, [categories, selectedCategoryId, selectedTransactionType, setValue]);
 
   const handleDialogOpenChange = (open: boolean) => {
     if (open) return;
@@ -118,6 +150,7 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
     setAiParseError(null);
     setSubmitError(null);
     reset({
+      transaction_type: 'expense',
       amount: undefined,
       currency: 'USD',
       note: '',
@@ -156,17 +189,19 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
     } catch (error) {
       setParsedData(null);
       setStep('form');
-      setAiParseError(getErrorMessage(error, 'Failed to parse expense. Please enter details manually.'));
+      setAiParseError(getErrorMessage(error, 'Failed to parse transaction. Please enter details manually.'));
     }
   };
 
   const onSubmit = async (data: ExpenseFormData) => {
     setSubmitError(null);
     try {
-      const selectedCategory = data.category_id || categories[0]?.id || '';
+      const fallbackCategory = categoriesForType[0]?.id || '';
+      const selectedCategory = data.category_id || fallbackCategory;
       const currency = data.currency || 'USD';
       const expenseData = {
         amount: Number(data.amount),
+        transaction_type: data.transaction_type,
         currency,
         original_amount: currency !== 'USD' ? Number(data.amount) : undefined,
         exchange_rate: currency !== 'USD' ? 1 : undefined,
@@ -182,7 +217,9 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
       }
       handleClose();
     } catch (error) {
-      setSubmitError(getErrorMessage(error, isEditMode ? 'Failed to update expense.' : 'Failed to save expense.'));
+      setSubmitError(
+        getErrorMessage(error, isEditMode ? 'Failed to update transaction.' : 'Failed to save transaction.')
+      );
     }
   };
 
@@ -203,14 +240,14 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
           <div className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-6">
             <div className="space-y-1">
               <DialogPrimitive.Title className="text-lg font-semibold">
-                {isEditMode ? 'Edit Expense' : 'Add Expense'}
+                {isEditMode ? 'Edit Transaction' : 'Add Transaction'}
               </DialogPrimitive.Title>
               <DialogPrimitive.Description className="text-sm text-muted-foreground">
-                {isEditMode ? 'Update a saved transaction.' : 'Capture your expense with AI or manual entry.'}
+                {isEditMode ? 'Update a saved transaction.' : 'Capture your income or expense with AI or manual entry.'}
               </DialogPrimitive.Description>
             </div>
             <DialogPrimitive.Close asChild>
-              <Button type="button" variant="ghost" size="icon" aria-label="Close expense modal">
+              <Button type="button" variant="ghost" size="icon" aria-label="Close transaction modal">
                 <X className="h-4 w-4" />
               </Button>
             </DialogPrimitive.Close>
@@ -226,12 +263,33 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
                       <span className="font-medium">AI Assistant</span>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      Describe your spend and we will prefill the form.
+                      Describe your transaction and we will prefill the form.
                     </p>
+                    <div className="grid grid-cols-2 gap-2 rounded-lg border border-border p-1">
+                      {transactionTypeOptions.map((option) => (
+                        <Button
+                          key={option.value}
+                          type="button"
+                          variant={selectedTransactionType === option.value ? 'default' : 'ghost'}
+                          onClick={() =>
+                            setValue('transaction_type', option.value, {
+                              shouldValidate: true,
+                              shouldDirty: true,
+                            })
+                          }
+                        >
+                          {option.label}
+                        </Button>
+                      ))}
+                    </div>
                     <textarea
                       value={naturalLanguage}
                       onChange={(event) => setNaturalLanguage(event.target.value)}
-                      placeholder="Spent $45.50 on dinner at Mario's yesterday."
+                      placeholder={
+                        selectedTransactionType === 'income'
+                          ? 'Received $1,250 freelance payment yesterday.'
+                          : "Spent $45.50 on dinner at Mario's yesterday."
+                      }
                       className="h-28 w-full rounded-lg border border-border bg-background p-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     />
                   </CardContent>
@@ -280,13 +338,38 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
                 {submitError ? (
                   <Alert variant="destructive">
                     <TriangleAlert className="h-4 w-4" />
-                    <AlertTitle>Unable to save expense</AlertTitle>
+                    <AlertTitle>Unable to save transaction</AlertTitle>
                     <AlertDescription>{submitError}</AlertDescription>
                   </Alert>
                 ) : null}
 
                 <Card>
                   <CardContent className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2">
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <label className="text-sm font-medium">Type</label>
+                      <div className="grid grid-cols-2 gap-2 rounded-lg border border-border p-1">
+                        {transactionTypeOptions.map((option) => (
+                          <Button
+                            key={option.value}
+                            type="button"
+                            variant={selectedTransactionType === option.value ? 'default' : 'ghost'}
+                            onClick={() =>
+                              setValue('transaction_type', option.value, {
+                                shouldValidate: true,
+                                shouldDirty: true,
+                              })
+                            }
+                          >
+                            {option.label}
+                          </Button>
+                        ))}
+                      </div>
+                      <input type="hidden" {...register('transaction_type')} />
+                      {errors.transaction_type ? (
+                        <p className="text-xs text-destructive">{errors.transaction_type.message}</p>
+                      ) : null}
+                    </div>
+
                     <div className="space-y-1.5 sm:col-span-1">
                       <label className="text-sm font-medium" htmlFor="expense-amount">
                         Amount
@@ -378,8 +461,8 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
                             errors.category_id ? 'border-destructive' : 'border-border'
                           )}
                         >
-                          <option value="">Select category</option>
-                          {categories.map((category) => (
+                          <option value="">Select {selectedTransactionType} category</option>
+                          {categoriesForType.map((category) => (
                             <option key={category.id} value={category.id}>
                               {category.name}
                             </option>
@@ -389,11 +472,16 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
                       {errors.category_id ? (
                         <p className="text-xs text-destructive">{errors.category_id.message}</p>
                       ) : null}
+                      {!isCategoriesLoading && categoriesForType.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          No {selectedTransactionType} categories yet. Create one in Categories.
+                        </p>
+                      ) : null}
                       {parsedData?.suggested_category_id ? (
                         <p className="flex items-center gap-1 text-xs text-muted-foreground">
                           <Sparkles className="h-3 w-3 text-primary" />
                           Suggested:{' '}
-                          {categories.find((category) => category.id === parsedData.suggested_category_id)?.name ||
+                          {categoriesForType.find((category) => category.id === parsedData.suggested_category_id)?.name ||
                             'Category'}
                         </p>
                       ) : null}

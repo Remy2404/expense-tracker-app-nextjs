@@ -16,10 +16,19 @@ import { Card, CardContent } from '@/components/ui/card';
 import { buildExpenseCsv, downloadFile } from '@/lib/export';
 import { exportExpensesAsPdf } from '@/lib/export-pdf';
 import { getCurrencySymbol } from '@/lib/currencies';
-import { Expense } from '@/types';
+import { Expense, TransactionType } from '@/types';
+import {
+  getCategoryType,
+  getSignedTransactionAmount,
+  getTransactionType,
+  isExpenseTransaction,
+  isIncomeTransaction,
+} from '@/lib/transactions';
 
 type ExportRange = 'all' | 'current-month';
+type TransactionTypeFilter = 'all' | TransactionType;
 type ExpenseFilters = {
+  transactionType: TransactionTypeFilter;
   query: string;
   categoryId: string;
   dateFrom: string;
@@ -29,6 +38,7 @@ type ExpenseFilters = {
 };
 
 const EMPTY_FILTERS: ExpenseFilters = {
+  transactionType: 'all',
   query: '',
   categoryId: '',
   dateFrom: '',
@@ -38,6 +48,7 @@ const EMPTY_FILTERS: ExpenseFilters = {
 };
 
 const getFiltersFromSearchParams = (searchParams: URLSearchParams | ReadonlyURLSearchParams): ExpenseFilters => ({
+  transactionType: (searchParams.get('type') as TransactionTypeFilter) || 'all',
   query: searchParams.get('q') || '',
   categoryId: searchParams.get('categoryId') || '',
   dateFrom: searchParams.get('dateFrom') || '',
@@ -47,6 +58,7 @@ const getFiltersFromSearchParams = (searchParams: URLSearchParams | ReadonlyURLS
 });
 
 const filtersEqual = (a: ExpenseFilters, b: ExpenseFilters): boolean =>
+  a.transactionType === b.transactionType &&
   a.query === b.query &&
   a.categoryId === b.categoryId &&
   a.dateFrom === b.dateFrom &&
@@ -54,8 +66,11 @@ const filtersEqual = (a: ExpenseFilters, b: ExpenseFilters): boolean =>
   a.minAmount === b.minAmount &&
   a.maxAmount === b.maxAmount;
 
-const getActiveFilterCount = (filters: ExpenseFilters) =>
-  Object.values(filters).filter((value) => value.trim().length > 0).length;
+const getActiveFilterCount = (filters: ExpenseFilters) => {
+  const textFilters = [filters.query, filters.categoryId, filters.dateFrom, filters.dateTo, filters.minAmount, filters.maxAmount];
+  const textFilterCount = textFilters.filter((value) => value.trim().length > 0).length;
+  return textFilterCount + (filters.transactionType !== 'all' ? 1 : 0);
+};
 
 export default function ExpensesPage() {
   const router = useRouter();
@@ -79,13 +94,19 @@ export default function ExpensesPage() {
   );
 
   const currentMonth = new Date().toISOString().slice(0, 7);
+  const filteredCategories = useMemo(() => {
+    if (filters.transactionType === 'all') return categories;
+    return categories.filter((category) => getCategoryType(category) === filters.transactionType);
+  }, [categories, filters.transactionType]);
 
   const filteredExpenses = useMemo(() => {
     return expenses.filter((expense) => {
       const expenseDate = new Date(expense.date);
       const searchSource = `${expense.notes || expense.note || ''} ${expense.merchant || ''}`.toLowerCase();
       const query = filters.query.trim().toLowerCase();
+      const transactionType = getTransactionType(expense);
 
+      if (filters.transactionType !== 'all' && transactionType !== filters.transactionType) return false;
       if (query && !searchSource.includes(query)) return false;
       if (filters.categoryId && expense.category_id !== filters.categoryId) return false;
 
@@ -115,6 +136,20 @@ export default function ExpensesPage() {
     });
   }, [currentMonth, filteredExpenses, exportRange]);
 
+  const totals = useMemo(() => {
+    const income = filteredExpenses
+      .filter((expense) => isIncomeTransaction(expense))
+      .reduce((sum, expense) => sum + expense.amount, 0);
+    const expense = filteredExpenses
+      .filter((item) => isExpenseTransaction(item))
+      .reduce((sum, item) => sum + item.amount, 0);
+    return {
+      income,
+      expense,
+      balance: income - expense,
+    };
+  }, [filteredExpenses]);
+
   const activeFilterCount = getActiveFilterCount(filters);
 
   const getCategoryName = (categoryId: string | undefined) => {
@@ -141,7 +176,7 @@ export default function ExpensesPage() {
       await deleteExpense({ id: deleteTarget.id });
       setDeleteTarget(null);
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : 'Failed to delete expense.');
+      setDeleteError(error instanceof Error ? error.message : 'Failed to delete transaction.');
     } finally {
       setDeletingId(null);
     }
@@ -172,7 +207,18 @@ export default function ExpensesPage() {
   }, [searchParams]);
 
   useEffect(() => {
+    if (filters.transactionType === 'all' || !filters.categoryId) return;
+    const selectedCategory = categories.find((category) => category.id === filters.categoryId);
+    if (!selectedCategory) return;
+    if (getCategoryType(selectedCategory) !== filters.transactionType) {
+      setFilters((prev) => ({ ...prev, categoryId: '' }));
+    }
+  }, [categories, filters.categoryId, filters.transactionType]);
+
+  useEffect(() => {
     const params = new URLSearchParams(searchParams.toString());
+    if (filters.transactionType !== 'all') params.set('type', filters.transactionType);
+    else params.delete('type');
     if (filters.query) params.set('q', filters.query);
     else params.delete('q');
     if (filters.categoryId) params.set('categoryId', filters.categoryId);
@@ -225,8 +271,8 @@ export default function ExpensesPage() {
     <div className="space-y-6">
       <div className="flex flex-col flex-wrap items-start justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Expenses</h1>
-          <p className="text-muted-foreground">Manage and track all your transactions.</p>
+          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Transactions</h1>
+          <p className="text-muted-foreground">Manage and track your income and expenses.</p>
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           <Button type="button" variant={isFilterOpen ? 'secondary' : 'outline'} onClick={() => setIsFilterOpen((prev) => !prev)}>
@@ -241,7 +287,7 @@ export default function ExpensesPage() {
             className="h-10 rounded-md border border-border bg-background px-3 text-sm"
             aria-label="Export range"
           >
-            <option value="all">All expenses</option>
+            <option value="all">All transactions</option>
             <option value="current-month">Current month</option>
           </select>
 
@@ -263,9 +309,40 @@ export default function ExpensesPage() {
             }}
           >
             <Plus className="mr-2 h-4 w-4" />
-            Add
+            Add Transaction
           </Button>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Card>
+          <CardContent className="space-y-1 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Income</p>
+            <p className="text-xl font-semibold text-emerald-600">
+              +{getCurrencySymbol('USD')}
+              {totals.income.toFixed(2)}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="space-y-1 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Expense</p>
+            <p className="text-xl font-semibold text-destructive">
+              -{getCurrencySymbol('USD')}
+              {totals.expense.toFixed(2)}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="space-y-1 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Balance</p>
+            <p className={`text-xl font-semibold ${totals.balance >= 0 ? 'text-emerald-600' : 'text-destructive'}`}>
+              {totals.balance >= 0 ? '+' : '-'}
+              {getCurrencySymbol('USD')}
+              {Math.abs(totals.balance).toFixed(2)}
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       {exportError ? (
@@ -280,7 +357,7 @@ export default function ExpensesPage() {
         <PageSkeleton cards={2} rows={8} />
       ) : isError ? (
         <ErrorState
-          title="Failed to load expenses"
+          title="Failed to load transactions"
           description="Please refresh and try again."
           onRetry={() => void mutate()}
         />
@@ -290,6 +367,16 @@ export default function ExpensesPage() {
             <Card>
               <CardContent className="space-y-4 p-4">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <select
+                    value={filters.transactionType}
+                    onChange={(event) => updateFilter('transactionType', event.target.value as TransactionTypeFilter)}
+                    className="h-10 rounded-md border border-border bg-background px-3 text-sm"
+                  >
+                    <option value="all">All types</option>
+                    <option value="expense">Expense</option>
+                    <option value="income">Income</option>
+                  </select>
+
                   <input
                     type="text"
                     value={filters.query}
@@ -304,7 +391,7 @@ export default function ExpensesPage() {
                     className="h-10 rounded-md border border-border bg-background px-3 text-sm"
                   >
                     <option value="">All categories</option>
-                    {categories.map((category) => (
+                    {filteredCategories.map((category) => (
                       <option key={category.id} value={category.id}>
                         {category.name}
                       </option>
@@ -343,7 +430,7 @@ export default function ExpensesPage() {
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <p className="text-sm text-muted-foreground">{filteredExpenses.length} matching expenses</p>
+                  <p className="text-sm text-muted-foreground">{filteredExpenses.length} matching transactions</p>
                   <Button type="button" variant="outline" size="sm" onClick={clearFilters} disabled={activeFilterCount === 0}>
                     Clear filters
                   </Button>
@@ -356,13 +443,13 @@ export default function ExpensesPage() {
             {filteredExpenses.length === 0 ? (
               <CardContent className="p-6">
                 <EmptyState
-                  title={activeFilterCount > 0 ? 'No matching expenses' : 'No expenses yet'}
+                  title={activeFilterCount > 0 ? 'No matching transactions' : 'No transactions yet'}
                   description={
                     activeFilterCount > 0
                       ? 'Try adjusting your filters to widen the result set.'
-                      : 'Add your first expense to start tracking.'
+                      : 'Add your first transaction to start tracking.'
                   }
-                  actionLabel={activeFilterCount > 0 ? 'Clear filters' : 'Add expense'}
+                  actionLabel={activeFilterCount > 0 ? 'Clear filters' : 'Add transaction'}
                   onAction={
                     activeFilterCount > 0
                       ? clearFilters
@@ -378,19 +465,27 @@ export default function ExpensesPage() {
                 {filteredExpenses.map((expense) => (
                   <div key={expense.id} className="flex items-center justify-between gap-4 p-4 sm:p-5">
                     <div className="min-w-0 space-y-1">
-                      <p className="truncate font-medium">{expense.notes || expense.note || 'Expense'}</p>
+                      <p className="truncate font-medium">{expense.notes || expense.note || 'Transaction'}</p>
                       <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                         <Badge variant="outline">{getCategoryName(expense.category_id)}</Badge>
+                        <Badge variant={getTransactionType(expense) === 'income' ? 'default' : 'secondary'}>
+                          {getTransactionType(expense) === 'income' ? 'Income' : 'Expense'}
+                        </Badge>
                         <span>{new Date(expense.date).toLocaleDateString()}</span>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-1 sm:gap-3">
-                      <p className="text-right text-base font-semibold sm:text-lg">
+                      <p
+                        className={`text-right text-base font-semibold sm:text-lg ${
+                          getSignedTransactionAmount(expense) >= 0 ? 'text-emerald-600' : 'text-destructive'
+                        }`}
+                      >
+                        {getSignedTransactionAmount(expense) >= 0 ? '+' : '-'}
                         {getCurrencySymbol(expense.currency || 'USD')}
-                        {expense.amount.toFixed(2)}
+                        {Math.abs(expense.amount).toFixed(2)}
                       </p>
-                      <Button type="button" variant="ghost" size="icon" onClick={() => handleEdit(expense)} aria-label="Edit expense">
+                      <Button type="button" variant="ghost" size="icon" onClick={() => handleEdit(expense)} aria-label="Edit transaction">
                         <Edit2 className="h-4 w-4" />
                       </Button>
                       <Button
@@ -399,7 +494,7 @@ export default function ExpensesPage() {
                         size="icon"
                         onClick={() => handleRequestDelete(expense)}
                         disabled={deletingId === expense.id}
-                        aria-label="Delete expense"
+                        aria-label="Delete transaction"
                       >
                         {deletingId === expense.id ? (
                           <Loader2 className="h-4 w-4 animate-spin text-destructive" />

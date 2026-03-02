@@ -3,15 +3,49 @@ import useSWR from 'swr';
 import useSWRMutation from 'swr/mutation';
 import { useSWRConfig } from 'swr';
 import { supabase } from '@/lib/supabase';
-import { Expense, Category, Budget, RecurringExpense } from '@/types';
+import { Expense, Category, CategoryType, Budget, RecurringExpense } from '@/types';
 import { Goal, GoalTransaction } from '@/types/goals';
 import { useAuth } from '@/contexts/AuthContext';
 import { MOBILE_DEFAULT_CATEGORIES } from '@/constants/defaultCategories';
+import { DEFAULT_CATEGORY_TYPE } from '@/lib/transactions';
+
+type CategoryWriteInput = Partial<Category> & {
+  category_type?: CategoryType;
+};
+
+const normalizeCategory = (category: CategoryWriteInput): Category => {
+  const resolvedType = category.type ?? category.category_type ?? DEFAULT_CATEGORY_TYPE;
+  return {
+    ...category,
+    type: resolvedType,
+    category_type: resolvedType,
+  } as Category;
+};
+
+const toCategoryInsertPayload = (category: CategoryWriteInput) => {
+  const { type, ...rest } = category;
+  return {
+    ...rest,
+    category_type: type ?? category.category_type ?? DEFAULT_CATEGORY_TYPE,
+  };
+};
+
+const toCategoryUpdatePayload = (category: CategoryWriteInput) => {
+  const { type, ...rest } = category;
+  if (type === undefined) return rest;
+  return {
+    ...rest,
+    category_type: type,
+  };
+};
 
 // Generic fetcher using Supabase client
 const fetcher = async (table: string) => {
   const { data, error } = await supabase.from(table).select('*').neq('is_deleted', true);
   if (error) throw error;
+  if (table === 'categories') {
+    return (data || []).map((category) => normalizeCategory(category as CategoryWriteInput));
+  }
   return data;
 };
 
@@ -97,7 +131,7 @@ export function useCategories() {
 
         // Prepare payload with firebase_uid
         const payload = missingDefaults.map((category) => ({
-          ...category,
+          ...toCategoryInsertPayload(category),
           firebase_uid: user.uid,
         }));
 
@@ -260,10 +294,10 @@ export function useAddCategory() {
     'categories',
     async (_key, { arg }: { arg: Omit<Category, 'id' | 'sync_status' | 'is_deleted'> }) => {
       if (!user?.uid) throw new Error('User not authenticated');
-      const payload = { ...arg, firebase_uid: user.uid };
+      const payload = { ...toCategoryInsertPayload(arg), firebase_uid: user.uid };
       const { data, error } = await supabase.from('categories').insert(payload).select().single();
       if (error) throw error;
-      return data;
+      return normalizeCategory(data as CategoryWriteInput);
     },
     {
       onSuccess: () => {
@@ -279,14 +313,15 @@ export function useEditCategory() {
     'categories',
     async (_key, { arg }: { arg: { id: string } & Partial<Omit<Category, 'id'>> }) => {
       const { id, ...updates } = arg;
+      const payload = toCategoryUpdatePayload(updates);
       const { data, error } = await supabase
         .from('categories')
-        .update(updates)
+        .update(payload)
         .eq('id', id)
         .select()
         .single();
       if (error) throw error;
-      return data;
+      return normalizeCategory(data as CategoryWriteInput);
     },
     {
       onSuccess: () => {

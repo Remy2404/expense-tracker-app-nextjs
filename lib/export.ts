@@ -1,4 +1,5 @@
 import { Category, Expense } from '@/types';
+import { getSignedTransactionAmount, getTransactionType } from '@/lib/transactions';
 
 const csvEscape = (value: string | number | null | undefined): string => {
   if (value === null || value === undefined) return '';
@@ -15,12 +16,14 @@ const getCategoryName = (categoryId: string | undefined, categories: Category[])
 };
 
 export const buildExpenseCsv = (expenses: Expense[], categories: Category[]): string => {
-  const header = ['Date', 'Amount', 'Category', 'Merchant', 'Notes'];
+  const header = ['Date', 'Type', 'Amount', 'Category', 'Merchant', 'Notes'];
   const rows = expenses.map((expense) => {
     const date = new Date(expense.date).toLocaleDateString();
+    const signedAmount = getSignedTransactionAmount(expense);
     return [
       date,
-      expense.amount.toFixed(2),
+      getTransactionType(expense),
+      signedAmount.toFixed(2),
       getCategoryName(expense.category_id, categories),
       expense.merchant || '',
       expense.notes || expense.note || '',

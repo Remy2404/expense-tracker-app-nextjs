@@ -36,6 +36,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { isExpenseTransaction } from '@/lib/transactions';
 
 type Period = 'week' | 'month' | 'year';
 
@@ -85,6 +86,7 @@ export default function AnalyticsPage() {
 
   const filteredExpenses = useMemo(() => {
     return expenses.filter((expense) => {
+      if (!isExpenseTransaction(expense)) return false;
       const expenseDate = new Date(expense.date);
       return expenseDate >= dateRange.start && expenseDate <= dateRange.end;
     });
@@ -92,6 +94,7 @@ export default function AnalyticsPage() {
 
   const previousExpenses = useMemo(() => {
     return expenses.filter((expense) => {
+      if (!isExpenseTransaction(expense)) return false;
       const expenseDate = new Date(expense.date);
       return expenseDate >= previousDateRange.start && expenseDate <= previousDateRange.end;
     });

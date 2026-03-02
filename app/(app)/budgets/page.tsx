@@ -8,6 +8,7 @@ import { BudgetModal } from '@/components/BudgetModal';
 import { EmptyState } from '@/components/state/EmptyState';
 import { useBudgets, useDeleteBudget, useExpenses } from '@/hooks/useData';
 import { currencyFormat } from '@/lib/billSplit';
+import { isExpenseTransaction } from '@/lib/transactions';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -33,6 +34,7 @@ export default function BudgetsPage() {
   const spendingByMonth = useMemo(() => {
     const spending: Record<string, number> = {};
     expenses.forEach((expense) => {
+      if (!isExpenseTransaction(expense)) return;
       const date = new Date(expense.date);
       const monthKey = format(date, 'yyyy-MM');
       spending[monthKey] = (spending[monthKey] || 0) + expense.amount;

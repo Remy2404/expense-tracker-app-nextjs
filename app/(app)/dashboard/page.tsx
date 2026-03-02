@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { useAiNudges } from '@/hooks/useAi';
 import { useBudgets, useCategories, useExpenses } from '@/hooks/useData';
 import { getCurrencySymbol } from '@/lib/currencies';
+import { isExpenseTransaction, isIncomeTransaction } from '@/lib/transactions';
 
 export default function DashboardPage() {
   const {
@@ -28,7 +29,6 @@ export default function DashboardPage() {
     mutate: mutateBudgets,
   } = useBudgets();
   const {
-    categories,
     isLoading: categoriesLoading,
     isError: categoriesError,
     mutate: mutateCategories,
@@ -46,16 +46,26 @@ export default function DashboardPage() {
 
   const currentMonth = new Date().toISOString().slice(0, 7);
 
-  const currentMonthExpenses = useMemo(() => {
+  const currentMonthTransactions = useMemo(() => {
     return expenses.filter((expense) => {
       const dateStr = typeof expense.date === 'string' ? expense.date : expense.date.toISOString();
       return dateStr.startsWith(currentMonth);
     });
   }, [expenses, currentMonth]);
 
-  const totalSpent = useMemo(() => {
-    return currentMonthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-  }, [currentMonthExpenses]);
+  const totalExpense = useMemo(() => {
+    return currentMonthTransactions
+      .filter((expense) => isExpenseTransaction(expense))
+      .reduce((sum, expense) => sum + expense.amount, 0);
+  }, [currentMonthTransactions]);
+
+  const totalIncome = useMemo(() => {
+    return currentMonthTransactions
+      .filter((expense) => isIncomeTransaction(expense))
+      .reduce((sum, expense) => sum + expense.amount, 0);
+  }, [currentMonthTransactions]);
+
+  const totalBalance = useMemo(() => totalIncome - totalExpense, [totalExpense, totalIncome]);
 
   const currentBudget = useMemo(() => {
     return budgets.find((budget) => budget.month === currentMonth);
@@ -63,30 +73,8 @@ export default function DashboardPage() {
 
   const remainingBudget = useMemo(() => {
     if (!currentBudget) return 0;
-    return currentBudget.total_amount - totalSpent;
-  }, [currentBudget, totalSpent]);
-
-  const largestCategoryName = useMemo(() => {
-    if (currentMonthExpenses.length === 0) return '-';
-
-    const categoryTotals: Record<string, number> = {};
-    currentMonthExpenses.forEach((expense) => {
-      const categoryId = expense.category_id || 'unknown';
-      categoryTotals[categoryId] = (categoryTotals[categoryId] || 0) + expense.amount;
-    });
-
-    let maxCategoryId = '';
-    let maxAmount = -1;
-    for (const [categoryId, amount] of Object.entries(categoryTotals)) {
-      if (amount > maxAmount) {
-        maxAmount = amount;
-        maxCategoryId = categoryId;
-      }
-    }
-
-    const category = categories.find((item) => item.id === maxCategoryId);
-    return category?.name || 'Unknown';
-  }, [currentMonthExpenses, categories]);
+    return currentBudget.total_amount - totalExpense;
+  }, [currentBudget, totalExpense]);
 
   const recentTransactions = useMemo(() => {
     return [...expenses]
@@ -115,15 +103,15 @@ export default function DashboardPage() {
       <header className='flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center'>
         <div>
           <h1 className='text-2xl font-bold tracking-tight md:text-3xl'>Dashboard</h1>
-          <p className='text-foreground/60'>Overview of your recent expenses and budget.</p>
+          <p className='text-foreground/60'>Overview of your income, expenses, and balance.</p>
         </div>
         <Button
           onClick={() => setIsAddModalOpen(true)}
           className='flex items-center gap-2 whitespace-nowrap'
-          aria-label='Add a new expense'
+          aria-label='Add a new transaction'
         >
           <Plus size={18} />
-          New Expense
+          New Transaction
         </Button>
       </header>
 
@@ -143,27 +131,29 @@ export default function DashboardPage() {
             </h2>
             <div className='grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3'>
               <DashboardStatCard
-                title='Total Spent'
-                value={`${getCurrencySymbol('USD')}${totalSpent.toFixed(2)}`}
+                title='Income'
+                value={`+${getCurrencySymbol('USD')}${totalIncome.toFixed(2)}`}
                 subtitle='Current month'
-                badgeLabel='Month to date'
+                badgeLabel='Money in'
+                valueClassName='text-emerald-600'
               />
               <DashboardStatCard
-                title='Remaining Budget'
-                value={`${getCurrencySymbol('USD')}${remainingBudget.toFixed(2)}`}
-                subtitle={remainingBudget < 0 ? 'Above limit' : 'Still available'}
-                badgeLabel={currentBudget ? 'Active budget' : 'No budget'}
-                valueClassName={remainingBudget < 0 ? 'text-destructive' : 'text-emerald-600'}
+                title='Expenses'
+                value={`-${getCurrencySymbol('USD')}${totalExpense.toFixed(2)}`}
+                subtitle='Current month'
+                badgeLabel='Money out'
+                valueClassName='text-destructive'
               />
               <DashboardStatCard
-                title='Largest Category'
-                value={largestCategoryName}
-                subtitle='Highest spend category'
+                title='Balance'
+                value={`${totalBalance >= 0 ? '+' : '-'}${getCurrencySymbol('USD')}${Math.abs(totalBalance).toFixed(2)}`}
+                subtitle={totalBalance >= 0 ? 'Net positive' : 'Net negative'}
                 badgeLabel={
-                  currentMonthExpenses.length > 0
-                    ? `${currentMonthExpenses.length} expenses`
-                    : 'No expenses'
+                  currentMonthTransactions.length > 0
+                    ? `${currentMonthTransactions.length} transactions`
+                    : 'No transactions'
                 }
+                valueClassName={totalBalance >= 0 ? 'text-emerald-600' : 'text-destructive'}
               />
             </div>
           </section>
@@ -175,7 +165,7 @@ export default function DashboardPage() {
             <BudgetHealthCard
               hasCurrentBudget={Boolean(currentBudget)}
               totalBudget={currentBudget?.total_amount ?? 0}
-              totalSpent={totalSpent}
+              totalSpent={totalExpense}
               remainingBudget={remainingBudget}
             />
           </section>

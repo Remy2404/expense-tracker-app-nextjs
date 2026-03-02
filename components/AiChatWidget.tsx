@@ -109,6 +109,7 @@ export function AiChatWidget() {
 
           await addExpense({
             amount: response.payload.amount,
+            transaction_type: 'expense',
             currency: 'USD',
             notes: note,
             date: expenseDate.toISOString(),
@@ -179,7 +180,7 @@ export function AiChatWidget() {
             <Bot className="h-4 w-4 text-primary" aria-hidden="true" />
             AI Financial Assistant
           </SheetTitle>
-          <SheetDescription>Ask spending questions or quickly add expenses with natural language.</SheetDescription>
+          <SheetDescription>Ask spending questions or quickly add transactions with natural language.</SheetDescription>
         </SheetHeader>
 
         <ScrollArea className="flex-1 bg-muted/20 px-4 py-4">

@@ -37,7 +37,7 @@ describe('DashboardPage', () => {
 
     const { container } = render(<DashboardPage />);
 
-    expect(screen.queryByText('Total Spent')).not.toBeInTheDocument();
+    expect(screen.queryByText('Income')).not.toBeInTheDocument();
     expect(container.querySelectorAll('.animate-pulse').length).toBeGreaterThan(0);
   });
 
@@ -88,18 +88,19 @@ describe('DashboardPage', () => {
 
     render(<DashboardPage />);
 
-    expect(screen.getByText('Total Spent')).toBeInTheDocument();
-    expect(screen.getAllByText('$75.00').length).toBeGreaterThan(0);
+    expect(screen.getByText('Income')).toBeInTheDocument();
+    expect(screen.getByText('Expenses')).toBeInTheDocument();
+    expect(screen.getAllByText('-$75.00').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('+$0.00').length).toBeGreaterThan(0);
     expect(screen.getAllByText('$425.00').length).toBeGreaterThan(0);
-    expect(screen.getByText('Food')).toBeInTheDocument();
     expect(screen.getByText('Groceries')).toBeInTheDocument();
   });
 
-  it('opens add expense modal when user clicks new expense', async () => {
+  it('opens add expense modal when user clicks new transaction', async () => {
     const user = userEvent.setup();
     render(<DashboardPage />);
 
-    await user.click(screen.getByRole('button', { name: /add a new expense/i }));
+    await user.click(screen.getByRole('button', { name: /add a new transaction/i }));
 
     expect(screen.getByTestId('add-expense-modal')).toBeInTheDocument();
   });

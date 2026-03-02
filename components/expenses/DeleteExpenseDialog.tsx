@@ -5,6 +5,7 @@ import { Loader2, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { getCurrencySymbol } from '@/lib/currencies';
+import { getSignedTransactionAmount, getTransactionType } from '@/lib/transactions';
 import { Expense } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -23,8 +24,12 @@ export function DeleteExpenseDialog({
   onConfirm,
   onOpenChange,
 }: DeleteExpenseDialogProps) {
-  const note = expense?.notes || expense?.note || 'Expense';
-  const amount = expense ? `${getCurrencySymbol(expense.currency || 'USD')}${expense.amount.toFixed(2)}` : '';
+  const note = expense?.notes || expense?.note || 'Transaction';
+  const amount = expense
+    ? `${getSignedTransactionAmount(expense) >= 0 ? '+' : '-'}${getCurrencySymbol(
+        expense.currency || 'USD'
+      )}${Math.abs(expense.amount).toFixed(2)}`
+    : '';
 
   return (
     <DialogPrimitive.Root open={Boolean(expense)} onOpenChange={onOpenChange}>
@@ -37,7 +42,7 @@ export function DeleteExpenseDialog({
             'data-[state=open]:animate-in data-[state=closed]:animate-out'
           )}
         >
-          <DialogPrimitive.Title className="text-lg font-semibold">Delete expense?</DialogPrimitive.Title>
+          <DialogPrimitive.Title className="text-lg font-semibold">Delete transaction?</DialogPrimitive.Title>
           <DialogPrimitive.Description className="mt-2 text-sm text-muted-foreground">
             This action is soft-delete and hides the record from active lists.
           </DialogPrimitive.Description>
@@ -46,7 +51,8 @@ export function DeleteExpenseDialog({
             <div className="mt-4 rounded-lg border border-border bg-muted/30 p-3">
               <p className="font-medium">{note}</p>
               <p className="text-sm text-muted-foreground">
-                {amount} • {new Date(expense.date).toLocaleDateString()}
+                {amount} • {getTransactionType(expense) === 'income' ? 'Income' : 'Expense'} •{' '}
+                {new Date(expense.date).toLocaleDateString()}
               </p>
             </div>
           ) : null}

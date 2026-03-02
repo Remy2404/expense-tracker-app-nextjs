@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Plus, Edit2, Trash2, Loader2, RefreshCw } from 'lucide-react';
-import { Category } from '@/types';
+import { Category, CategoryType } from '@/types';
 import { CategoryModal } from '@/components/CategoryModal';
 import { useAddCategory, useCategories, useDeleteCategory, useEditCategory } from '@/hooks/useData';
 import { MOBILE_DEFAULT_CATEGORIES } from '@/constants/defaultCategories';
@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getCategoryType } from '@/lib/transactions';
 
 export default function CategoriesPage() {
   const { user } = useAuth();
@@ -54,7 +55,7 @@ export default function CategoriesPage() {
     }
   };
 
-  const handleSubmit = async (data: { name: string; icon: string; color: string }) => {
+  const handleSubmit = async (data: { name: string; icon: string; color: string; type: CategoryType }) => {
     try {
       if (categoryToEdit) {
         await editCategory({ id: categoryToEdit.id, ...data });
@@ -108,8 +109,10 @@ export default function CategoriesPage() {
 
       // Insert missing defaults one by one
       for (const category of missingDefaults) {
+        const { type, ...rest } = category;
         const { error } = await supabase.from('categories').insert({
-          ...category,
+          ...rest,
+          category_type: type,
           firebase_uid: user.uid,
         });
         if (error) {
@@ -132,7 +135,7 @@ export default function CategoriesPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Categories</h1>
-          <p className="text-muted-foreground">Create and manage your expense categories.</p>
+          <p className="text-muted-foreground">Create and manage your expense and income categories.</p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -206,7 +209,7 @@ export default function CategoriesPage() {
           <CardContent className="space-y-4">
             <EmptyState
               title="No categories yet"
-              description="Add your first category to better organize expenses."
+              description="Add your first category to better organize transactions."
               actionLabel="Add Category"
               onAction={handleOpenCreate}
             />
@@ -250,6 +253,11 @@ export default function CategoriesPage() {
                         </Badge>
                         <Badge variant={category.is_default ? 'secondary' : 'outline'}>
                           {category.is_default ? 'Default' : 'Custom'}
+                        </Badge>
+                        <Badge
+                          variant={getCategoryType(category) === 'income' ? 'default' : 'secondary'}
+                        >
+                          {getCategoryType(category) === 'income' ? 'Income' : 'Expense'}
                         </Badge>
                       </div>
                     </div>
