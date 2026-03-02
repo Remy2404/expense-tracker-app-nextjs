@@ -28,7 +28,7 @@ const expenseSchema = yup
     amount: yup.number().typeError('Amount must be a number').positive('Amount must be positive').required('Amount is required'),
     currency: yup.string().default('USD'),
     date: yup.string().required('Date is required'),
-    note: yup.string().required('Note/Merchant is required'),
+    note: yup.string().optional(),
     category_id: yup.string().required('Category is required'),
   })
   .required();
@@ -205,7 +205,7 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
         currency,
         original_amount: currency !== 'USD' ? Number(data.amount) : undefined,
         exchange_rate: currency !== 'USD' ? 1 : undefined,
-        notes: data.note || 'Expense',
+        notes: data.note?.trim() ? data.note.trim() : undefined,
         date: data.date ? new Date(data.date).toISOString() : new Date().toISOString(),
         category_id: selectedCategory,
       };

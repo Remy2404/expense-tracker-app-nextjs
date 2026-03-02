@@ -16,8 +16,10 @@ import {
 } from 'lucide-react';
 import { AiInsightType } from '@/types/ai';
 import {
+  endOfDay,
   format,
   eachDayOfInterval,
+  isWithinInterval,
   startOfWeek,
   endOfWeek,
   startOfMonth,
@@ -35,10 +37,57 @@ import { PageSkeleton } from '@/components/state/PageSkeleton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { PeriodModeBadge } from '@/components/ui/period-mode-badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { isExpenseTransaction } from '@/lib/transactions';
+import { toSafeDate } from '@/lib/dates';
+import { isExpenseTransaction, isIncomeTransaction } from '@/lib/transactions';
+import { Expense } from '@/types';
 
 type Period = 'week' | 'month' | 'year';
+type PeriodRange = { start: Date; end: Date };
+type AnalyticsTransaction = Pick<Expense, 'amount' | 'date'>;
+
+const buildPeriodSeries = (
+  periodTransactions: AnalyticsTransaction[],
+  selectedPeriod: Period,
+  dateRange: PeriodRange
+) => {
+  if (selectedPeriod === 'year') {
+    const monthMap = new Map<number, number>();
+    periodTransactions.forEach((expense) => {
+      const month = toSafeDate(expense.date).getMonth();
+      monthMap.set(month, (monthMap.get(month) || 0) + (expense.amount || 0));
+    });
+
+    const months = [];
+    for (let index = 0; index < 12; index += 1) {
+      months.push({
+        label: format(new Date(2024, index, 1), 'MMM'),
+        value: monthMap.get(index) || 0,
+      });
+    }
+    return months;
+  }
+
+  const days = eachDayOfInterval({
+    start: dateRange.start,
+    end: dateRange.end,
+  });
+  const dayMap = new Map<string, number>();
+
+  periodTransactions.forEach((expense) => {
+    const dateStr = format(toSafeDate(expense.date), 'yyyy-MM-dd');
+    dayMap.set(dateStr, (dayMap.get(dateStr) || 0) + (expense.amount || 0));
+  });
+
+  return days.map((day) => {
+    const dateStr = format(day, 'yyyy-MM-dd');
+    return {
+      label: format(day, selectedPeriod === 'month' ? 'dd' : 'EEE'),
+      value: dayMap.get(dateStr) || 0,
+    };
+  });
+};
 
 export default function AnalyticsPage() {
   const { expenses, isLoading: expensesLoading, isError: expensesError } = useExpenses();
@@ -84,25 +133,46 @@ export default function AnalyticsPage() {
     return { dateRange: { start, end }, previousDateRange: { start: prevStart, end: prevEnd } };
   }, [selectedPeriod]);
 
-  const filteredExpenses = useMemo(() => {
+  const filteredPeriodTransactions = useMemo(() => {
     return expenses.filter((expense) => {
-      if (!isExpenseTransaction(expense)) return false;
-      const expenseDate = new Date(expense.date);
-      return expenseDate >= dateRange.start && expenseDate <= dateRange.end;
+      const expenseDate = toSafeDate(expense.date);
+      return isWithinInterval(expenseDate, {
+        start: dateRange.start,
+        end: endOfDay(dateRange.end),
+      });
     });
   }, [expenses, dateRange]);
+
+  const filteredExpenseTransactions = useMemo(
+    () => filteredPeriodTransactions.filter((expense) => isExpenseTransaction(expense)),
+    [filteredPeriodTransactions]
+  );
+
+  const filteredIncomeTransactions = useMemo(
+    () => filteredPeriodTransactions.filter((expense) => isIncomeTransaction(expense)),
+    [filteredPeriodTransactions]
+  );
 
   const previousExpenses = useMemo(() => {
     return expenses.filter((expense) => {
       if (!isExpenseTransaction(expense)) return false;
-      const expenseDate = new Date(expense.date);
-      return expenseDate >= previousDateRange.start && expenseDate <= previousDateRange.end;
+      const expenseDate = toSafeDate(expense.date);
+      return isWithinInterval(expenseDate, {
+        start: previousDateRange.start,
+        end: endOfDay(previousDateRange.end),
+      });
     });
   }, [expenses, previousDateRange]);
 
   const totalSpent = useMemo(() => {
-    return filteredExpenses.reduce((sum, expense) => sum + (expense.amount || 0), 0);
-  }, [filteredExpenses]);
+    return filteredExpenseTransactions.reduce((sum, expense) => sum + (expense.amount || 0), 0);
+  }, [filteredExpenseTransactions]);
+
+  const totalIncome = useMemo(() => {
+    return filteredIncomeTransactions.reduce((sum, expense) => sum + (expense.amount || 0), 0);
+  }, [filteredIncomeTransactions]);
+
+  const netCashflow = useMemo(() => totalIncome - totalSpent, [totalIncome, totalSpent]);
 
   const previousTotal = useMemo(() => {
     return previousExpenses.reduce((sum, expense) => sum + (expense.amount || 0), 0);
@@ -113,15 +183,18 @@ export default function AnalyticsPage() {
     return ((totalSpent - previousTotal) / previousTotal) * 100;
   }, [totalSpent, previousTotal]);
 
-  const averageDaily = useMemo(() => {
-    const daysInPeriod = differenceInDays(dateRange.end, dateRange.start) + 1;
-    return totalSpent / daysInPeriod;
-  }, [totalSpent, dateRange]);
+  const daysInPeriod = useMemo(
+    () => differenceInDays(dateRange.end, dateRange.start) + 1,
+    [dateRange]
+  );
+
+  const averageDaily = useMemo(() => totalSpent / daysInPeriod, [totalSpent, daysInPeriod]);
+  const averageIncomeDaily = useMemo(() => totalIncome / daysInPeriod, [totalIncome, daysInPeriod]);
 
   const categoryData = useMemo(() => {
     const categoryTotals = new Map<string, { amount: number; color: string; name: string }>();
 
-    filteredExpenses.forEach((expense) => {
+    filteredExpenseTransactions.forEach((expense) => {
       const catId = expense.category_id || 'uncategorized';
       const current = categoryTotals.get(catId) || { amount: 0, color: '#6366f1', name: 'Other' };
       const category = categories.find((item) => item.id === expense.category_id);
@@ -140,7 +213,31 @@ export default function AnalyticsPage() {
         color: data.color,
       }))
       .sort((a, b) => b.amount - a.amount);
-  }, [filteredExpenses, categories]);
+  }, [filteredExpenseTransactions, categories]);
+
+  const incomeCategoryData = useMemo(() => {
+    const categoryTotals = new Map<string, { amount: number; color: string; name: string }>();
+
+    filteredIncomeTransactions.forEach((expense) => {
+      const catId = expense.category_id || 'uncategorized';
+      const current = categoryTotals.get(catId) || { amount: 0, color: '#22c55e', name: 'Other' };
+      const category = categories.find((item) => item.id === expense.category_id);
+
+      categoryTotals.set(catId, {
+        amount: current.amount + (expense.amount || 0),
+        color: category?.color || current.color,
+        name: category?.name || 'Other',
+      });
+    });
+
+    return Array.from(categoryTotals.entries())
+      .map(([, data]) => ({
+        name: data.name,
+        amount: data.amount,
+        color: data.color,
+      }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [filteredIncomeTransactions, categories]);
 
   const topCategories = useMemo(() => {
     return categoryData.slice(0, 5).map((category) => ({
@@ -149,75 +246,100 @@ export default function AnalyticsPage() {
     }));
   }, [categoryData, totalSpent]);
 
-  const barChartData = useMemo(() => {
-    if (selectedPeriod === 'year') {
-      const monthMap = new Map<number, number>();
-      filteredExpenses.forEach((expense) => {
-        const month = new Date(expense.date).getMonth();
-        monthMap.set(month, (monthMap.get(month) || 0) + (expense.amount || 0));
-      });
+  const topIncomeCategories = useMemo(() => {
+    return incomeCategoryData.slice(0, 5).map((category) => ({
+      ...category,
+      percentage: totalIncome > 0 ? (category.amount / totalIncome) * 100 : 0,
+    }));
+  }, [incomeCategoryData, totalIncome]);
 
-      const months = [];
-      for (let index = 0; index < 12; index += 1) {
-        months.push({
-          label: format(new Date(2024, index, 1), 'MMM'),
-          value: monthMap.get(index) || 0,
-        });
-      }
-      return months;
-    }
+  const expenseBarChartData = useMemo(
+    () => buildPeriodSeries(filteredExpenseTransactions, selectedPeriod, dateRange),
+    [filteredExpenseTransactions, selectedPeriod, dateRange]
+  );
 
-    const days = eachDayOfInterval({
-      start: dateRange.start,
-      end: dateRange.end,
-    });
-    const dayMap = new Map<string, number>();
-
-    filteredExpenses.forEach((expense) => {
-      const dateStr = format(new Date(expense.date), 'yyyy-MM-dd');
-      dayMap.set(dateStr, (dayMap.get(dateStr) || 0) + (expense.amount || 0));
-    });
-
-    return days.map((day) => {
-      const dateStr = format(day, 'yyyy-MM-dd');
-      return {
-        label: format(day, selectedPeriod === 'month' ? 'dd' : 'EEE'),
-        value: dayMap.get(dateStr) || 0,
-      };
-    });
-  }, [filteredExpenses, dateRange, selectedPeriod]);
+  const incomeBarChartData = useMemo(
+    () => buildPeriodSeries(filteredIncomeTransactions, selectedPeriod, dateRange),
+    [filteredIncomeTransactions, selectedPeriod, dateRange]
+  );
 
   const spendingTrendData = useMemo(() => {
     if (selectedPeriod === 'week') {
-      return barChartData;
+      return expenseBarChartData;
     }
 
     if (selectedPeriod === 'month') {
       const weeks = [];
       for (let index = 0; index < 5; index += 1) {
         const startIdx = index * 7;
-        if (startIdx >= barChartData.length) break;
-        const endIdx = Math.min(startIdx + 7, barChartData.length);
-        const weekData = barChartData.slice(startIdx, endIdx);
+        if (startIdx >= expenseBarChartData.length) break;
+        const endIdx = Math.min(startIdx + 7, expenseBarChartData.length);
+        const weekData = expenseBarChartData.slice(startIdx, endIdx);
         const weekTotal = weekData.reduce((sum, item) => sum + item.value, 0);
         weeks.push({ label: `W${index + 1}`, value: weekTotal });
       }
       return weeks;
     }
 
-    return barChartData;
-  }, [selectedPeriod, barChartData]);
+    return expenseBarChartData;
+  }, [selectedPeriod, expenseBarChartData]);
+
+  const incomeTrendData = useMemo(() => {
+    if (selectedPeriod === 'week') {
+      return incomeBarChartData;
+    }
+
+    if (selectedPeriod === 'month') {
+      const weeks = [];
+      for (let index = 0; index < 5; index += 1) {
+        const startIdx = index * 7;
+        if (startIdx >= incomeBarChartData.length) break;
+        const endIdx = Math.min(startIdx + 7, incomeBarChartData.length);
+        const weekData = incomeBarChartData.slice(startIdx, endIdx);
+        const weekTotal = weekData.reduce((sum, item) => sum + item.value, 0);
+        weeks.push({ label: `W${index + 1}`, value: weekTotal });
+      }
+      return weeks;
+    }
+
+    return incomeBarChartData;
+  }, [selectedPeriod, incomeBarChartData]);
+
+  const hasExpenseData = filteredExpenseTransactions.length > 0;
+  const hasIncomeData = filteredIncomeTransactions.length > 0;
+  const hasPeriodActivity = filteredPeriodTransactions.length > 0;
+  const usesIncomeFallback = !hasExpenseData && hasIncomeData;
+
+  const categoryChartTitle = usesIncomeFallback ? 'Income by Category' : 'Spending by Category';
+  const categoryChartData = usesIncomeFallback ? incomeCategoryData : categoryData;
+  const trendChartTitle = usesIncomeFallback
+    ? selectedPeriod === 'year'
+      ? 'Monthly Income Trend'
+      : 'Daily Income Trend'
+    : selectedPeriod === 'year'
+      ? 'Monthly Trend'
+      : 'Daily Trend';
+  const trendChartData = usesIncomeFallback ? incomeBarChartData : expenseBarChartData;
+  const trendLineTitle = usesIncomeFallback ? 'Income Trend' : 'Spending Trend';
+  const trendLineData = usesIncomeFallback ? incomeTrendData : spendingTrendData;
+  const topCategoryTitle = usesIncomeFallback ? 'Top Income' : 'Top Spending';
+  const topCategoryRows = usesIncomeFallback ? topIncomeCategories : topCategories;
+  const topCategoryShareLabel = usesIncomeFallback ? 'Top Income Category' : 'Top Spending Category';
+  const displayedDailyAverage = usesIncomeFallback ? averageIncomeDaily : averageDaily;
 
   const handleShare = async () => {
     try {
-      const topCategory = topCategories.length > 0 ? topCategories[0] : null;
+      const topCategory = topCategoryRows.length > 0 ? topCategoryRows[0] : null;
       const message = [
         `Financial Insights (${selectedPeriod === 'week' ? 'This Week' : selectedPeriod === 'month' ? 'This Month' : 'This Year'})`,
+        `Total Income: ${currencyFormat(totalIncome)}`,
         `\nTotal Spent: ${currencyFormat(totalSpent)}`,
+        `Net Cashflow: ${currencyFormat(netCashflow)}`,
+        `Transactions: ${filteredPeriodTransactions.length}`,
         `Trend: ${percentageChange >= 0 ? '+' : ''}${percentageChange.toFixed(0)}% vs previous`,
-        `Daily Average: ${currencyFormat(averageDaily)}`,
+        `Daily Average: ${currencyFormat(displayedDailyAverage)}`,
         topCategory
-          ? `\nTop Category: ${topCategory.name} (${currencyFormat(topCategory.amount)})`
+          ? `\n${topCategoryShareLabel}: ${topCategory.name} (${currencyFormat(topCategory.amount)})`
           : '',
         '\nGenerated by ExpenseVault',
       ]
@@ -240,6 +362,10 @@ export default function AnalyticsPage() {
 
   const previousLabel =
     selectedPeriod === 'week' ? 'last wk' : selectedPeriod === 'year' ? 'last yr' : 'last mo';
+
+  const periodMode = selectedPeriod === 'year' ? 'all-time' : 'this-month';
+  const periodDetail =
+    selectedPeriod === 'week' ? 'Week view' : selectedPeriod === 'year' ? 'Year view' : 'Month view';
 
   if (expensesLoading) {
     return (
@@ -301,6 +427,10 @@ export default function AnalyticsPage() {
         ))}
       </div>
 
+      <div className="flex items-center justify-end">
+        <PeriodModeBadge mode={periodMode} detail={periodDetail} />
+      </div>
+
       <Card className="bg-primary text-primary-foreground border-primary/20 shadow-sm">
         <CardContent className="p-6">
           <div className="flex justify-between items-start mb-4 gap-4">
@@ -324,67 +454,94 @@ export default function AnalyticsPage() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardContent className="p-4">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Income</p>
+              <p className="text-lg font-semibold text-emerald-600">{currencyFormat(totalIncome)}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Expense</p>
+              <p className="text-lg font-semibold text-destructive">{currencyFormat(totalSpent)}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Net</p>
+              <p className={`text-lg font-semibold ${netCashflow >= 0 ? 'text-emerald-600' : 'text-destructive'}`}>
+                {currencyFormat(netCashflow)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Transactions</p>
+              <p className="text-lg font-semibold">{filteredPeriodTransactions.length}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Spending by Category</CardTitle>
+            <CardTitle className="text-base">{categoryChartTitle}</CardTitle>
           </CardHeader>
           <CardContent>
-            {filteredExpenses.length === 0 ? (
+            {categoryChartData.length === 0 ? (
               <EmptyState
-                title="No category data"
-                description="Add expenses in this period to see category insights."
+                title={hasPeriodActivity ? 'No category split' : 'No category data'}
+                description={
+                  hasPeriodActivity
+                    ? 'Transactions exist, but category assignments are missing in this period.'
+                    : 'Add transactions in this period to see category insights.'
+                }
               />
             ) : (
-              <AnalyticsPieChart data={categoryData} />
+              <AnalyticsPieChart data={categoryChartData} />
             )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2 flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-base">
-              {selectedPeriod === 'year' ? 'Monthly Trend' : 'Daily Trend'}
-            </CardTitle>
-            <Badge variant="outline">Avg {currencyFormat(averageDaily)}</Badge>
+            <CardTitle className="text-base">{trendChartTitle}</CardTitle>
+            <Badge variant="outline">Avg {currencyFormat(displayedDailyAverage)}</Badge>
           </CardHeader>
           <CardContent>
-            {filteredExpenses.length === 0 ? (
+            {trendChartData.every((item) => item.value === 0) ? (
               <EmptyState
                 title="No trend data"
-                description="Track more expenses to see trends in this period."
+                description="Track more transactions to see trends in this period."
               />
             ) : (
-              <AnalyticsBarChart data={barChartData} />
+              <AnalyticsBarChart data={trendChartData} />
             )}
           </CardContent>
         </Card>
 
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Spending Trend</CardTitle>
+            <CardTitle className="text-base">{trendLineTitle}</CardTitle>
             <CardDescription>{periodLabel} activity</CardDescription>
           </CardHeader>
           <CardContent>
-            {filteredExpenses.length === 0 ? (
+            {trendLineData.every((item) => item.value === 0) ? (
               <EmptyState
-                title="No spending trend"
-                description="You have no expenses recorded for this period yet."
+                title="No period trend"
+                description="You have no transactions recorded for this period yet."
               />
             ) : (
-              <AnalyticsLineChart data={spendingTrendData} />
+              <AnalyticsLineChart data={trendLineData} />
             )}
           </CardContent>
         </Card>
       </div>
 
-      {topCategories.length > 0 ? (
+      {topCategoryRows.length > 0 ? (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Top Spending</CardTitle>
+            <CardTitle className="text-base">{topCategoryTitle}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {topCategories.map((category, index) => (
+            {topCategoryRows.map((category, index) => (
               <div key={`${category.name}-${index}`} className="flex items-center gap-4">
                 <div
                   className="w-10 h-10 rounded-full flex items-center justify-center"

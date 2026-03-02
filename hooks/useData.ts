@@ -7,14 +7,19 @@ import { Expense, Category, CategoryType, Budget, RecurringExpense } from '@/typ
 import { Goal, GoalTransaction } from '@/types/goals';
 import { useAuth } from '@/contexts/AuthContext';
 import { MOBILE_DEFAULT_CATEGORIES } from '@/constants/defaultCategories';
-import { DEFAULT_CATEGORY_TYPE } from '@/lib/transactions';
+import {
+  DEFAULT_CATEGORY_TYPE,
+  DEFAULT_TRANSACTION_TYPE,
+  getCategoryType,
+  getTransactionType,
+} from '@/lib/transactions';
 
 type CategoryWriteInput = Partial<Category> & {
-  category_type?: CategoryType;
+  category_type?: string | null;
 };
 
 const normalizeCategory = (category: CategoryWriteInput): Category => {
-  const resolvedType = category.type ?? category.category_type ?? DEFAULT_CATEGORY_TYPE;
+  const resolvedType = getCategoryType(category as Pick<Category, 'type' | 'category_type'>);
   return {
     ...category,
     type: resolvedType,
@@ -26,31 +31,81 @@ const toCategoryInsertPayload = (category: CategoryWriteInput) => {
   const { type, ...rest } = category;
   return {
     ...rest,
-    category_type: type ?? category.category_type ?? DEFAULT_CATEGORY_TYPE,
+    category_type: getCategoryType({
+      type: type as CategoryType | undefined,
+      category_type: category.category_type as CategoryType | undefined,
+    }).toUpperCase(),
   };
 };
 
 const toCategoryUpdatePayload = (category: CategoryWriteInput) => {
   const { type, ...rest } = category;
-  if (type === undefined) return rest;
+  if (type === undefined && category.category_type === undefined) return rest;
   return {
     ...rest,
-    category_type: type,
+    category_type: getCategoryType({
+      type: type as CategoryType | undefined,
+      category_type: category.category_type as CategoryType | undefined,
+    }).toUpperCase(),
+  };
+};
+
+type ExpenseWriteInput = Partial<Expense> & {
+  transaction_type?: string | null;
+};
+
+const normalizeExpense = (expense: ExpenseWriteInput): Expense => {
+  const resolvedType = getTransactionType(expense as Pick<Expense, 'transaction_type'>);
+  return {
+    ...expense,
+    transaction_type: resolvedType,
+  } as Expense;
+};
+
+const toExpenseWritePayload = (
+  expense: ExpenseWriteInput,
+  options?: { includeDefaultType?: boolean }
+) => {
+  const { transaction_type, ...rest } = expense;
+  if (transaction_type === undefined && !options?.includeDefaultType) {
+    return rest;
+  }
+  const normalizedType = getTransactionType({
+    transaction_type: (transaction_type ?? DEFAULT_TRANSACTION_TYPE) as Expense['transaction_type'],
+  });
+  return {
+    ...rest,
+    transaction_type: normalizedType.toUpperCase(),
   };
 };
 
 // Generic fetcher using Supabase client
 const fetcher = async (table: string) => {
-  const { data, error } = await supabase.from(table).select('*').neq('is_deleted', true);
+  const baseQuery = supabase.from(table).select('*').neq('is_deleted', true);
+  const query =
+    table === 'expenses'
+      ? baseQuery
+          .order('updated_at', { ascending: false })
+          .order('created_at', { ascending: false })
+          .order('date', { ascending: false })
+          .order('id', { ascending: false })
+      : baseQuery;
+  const { data, error } = await query;
   if (error) throw error;
   if (table === 'categories') {
     return (data || []).map((category) => normalizeCategory(category as CategoryWriteInput));
+  }
+  if (table === 'expenses') {
+    return (data || []).map((expense) => normalizeExpense(expense as ExpenseWriteInput));
   }
   return data;
 };
 
 export function useExpenses() {
-  const { data, error, isLoading, mutate } = useSWR<Expense[]>('expenses', fetcher);
+  const { data, error, isLoading, mutate } = useSWR<Expense[]>('expenses', fetcher, {
+    refreshInterval: 5000,
+    revalidateOnFocus: true,
+  });
 
   return {
     expenses: data || [],
@@ -465,7 +520,9 @@ export function useGoalTransactions(goalId?: string) {
       .from('goal_transactions')
       .select('*')
       .eq('goal_id', goalId)
-      .order('date', { ascending: false });
+      .order('date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false });
     if (error) throw error;
     return data as GoalTransaction[];
   };
@@ -491,9 +548,13 @@ export function useAddExpense() {
     async (_key, { arg }: { arg: Omit<Expense, 'id' | 'created_at' | 'updated_at'> }) => {
       if (!user?.uid) throw new Error('User not authenticated');
       const payload = { ...arg, firebase_uid: user.uid };
-      const { data, error } = await supabase.from('expenses').insert(payload).select().single();
+      const { data, error } = await supabase
+        .from('expenses')
+        .insert(toExpenseWritePayload(payload, { includeDefaultType: true }))
+        .select()
+        .single();
       if (error) throw error;
-      return data;
+      return normalizeExpense(data as ExpenseWriteInput);
     },
     {
       onSuccess: () => {
@@ -509,9 +570,14 @@ export function useEditExpense() {
     'expenses',
     async (_key, { arg }: { arg: { id: string } & Partial<Omit<Expense, 'id' | 'created_at' | 'updated_at'>> }) => {
       const { id, ...updates } = arg;
-      const { data, error } = await supabase.from('expenses').update(updates).eq('id', id).select().single();
+      const { data, error } = await supabase
+        .from('expenses')
+        .update(toExpenseWritePayload(updates))
+        .eq('id', id)
+        .select()
+        .single();
       if (error) throw error;
-      return data;
+      return normalizeExpense(data as ExpenseWriteInput);
     },
     {
       onSuccess: () => {

@@ -13,9 +13,12 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { PeriodMode, PeriodModeBadge } from '@/components/ui/period-mode-badge';
 import { buildExpenseCsv, downloadFile } from '@/lib/export';
 import { exportExpensesAsPdf } from '@/lib/export-pdf';
 import { getCurrencySymbol } from '@/lib/currencies';
+import { toSafeDate, toYearMonthKey } from '@/lib/dates';
+import { sortExpensesByRecency } from '@/lib/expenseSort';
 import { Expense, TransactionType } from '@/types';
 import {
   getCategoryType,
@@ -27,6 +30,10 @@ import {
 
 type ExportRange = 'all' | 'current-month';
 type TransactionTypeFilter = 'all' | TransactionType;
+const getPeriodModeFromSearchParams = (
+  searchParams: URLSearchParams | ReadonlyURLSearchParams
+): PeriodMode => (searchParams.get('period') === 'this-month' ? 'this-month' : 'all-time');
+
 type ExpenseFilters = {
   transactionType: TransactionTypeFilter;
   query: string;
@@ -88,12 +95,15 @@ export default function ExpensesPage() {
   const [exportRange, setExportRange] = useState<ExportRange>('all');
   const [isExporting, setIsExporting] = useState<'csv' | 'pdf' | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [periodMode, setPeriodMode] = useState<PeriodMode>(() =>
+    getPeriodModeFromSearchParams(new URLSearchParams(searchParams.toString()))
+  );
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [filters, setFilters] = useState<ExpenseFilters>(() =>
     getFiltersFromSearchParams(new URLSearchParams(searchParams.toString()))
   );
 
-  const currentMonth = new Date().toISOString().slice(0, 7);
+  const currentMonth = toYearMonthKey(new Date());
   const filteredCategories = useMemo(() => {
     if (filters.transactionType === 'all') return categories;
     return categories.filter((category) => getCategoryType(category) === filters.transactionType);
@@ -101,22 +111,26 @@ export default function ExpensesPage() {
 
   const filteredExpenses = useMemo(() => {
     return expenses.filter((expense) => {
-      const expenseDate = new Date(expense.date);
+      const expenseDate = toSafeDate(expense.date);
       const searchSource = `${expense.notes || expense.note || ''} ${expense.merchant || ''}`.toLowerCase();
       const query = filters.query.trim().toLowerCase();
       const transactionType = getTransactionType(expense);
+      const expenseMonthKey = toYearMonthKey(expense.date);
+
+      if (periodMode === 'this-month' && expenseMonthKey !== currentMonth) return false;
 
       if (filters.transactionType !== 'all' && transactionType !== filters.transactionType) return false;
       if (query && !searchSource.includes(query)) return false;
       if (filters.categoryId && expense.category_id !== filters.categoryId) return false;
 
       if (filters.dateFrom) {
-        const from = new Date(filters.dateFrom);
+        const from = toSafeDate(filters.dateFrom);
+        from.setHours(0, 0, 0, 0);
         if (expenseDate < from) return false;
       }
 
       if (filters.dateTo) {
-        const to = new Date(filters.dateTo);
+        const to = toSafeDate(filters.dateTo);
         to.setHours(23, 59, 59, 999);
         if (expenseDate > to) return false;
       }
@@ -126,15 +140,17 @@ export default function ExpensesPage() {
 
       return true;
     });
-  }, [expenses, filters]);
+  }, [currentMonth, expenses, filters, periodMode]);
+
+  const sortedFilteredExpenses = useMemo(
+    () => sortExpensesByRecency(filteredExpenses),
+    [filteredExpenses]
+  );
 
   const exportableExpenses = useMemo(() => {
-    if (exportRange === 'all') return filteredExpenses;
-    return filteredExpenses.filter((expense) => {
-      const expenseDate = typeof expense.date === 'string' ? expense.date : expense.date.toISOString();
-      return expenseDate.startsWith(currentMonth);
-    });
-  }, [currentMonth, filteredExpenses, exportRange]);
+    if (exportRange === 'all') return sortedFilteredExpenses;
+    return sortedFilteredExpenses.filter((expense) => toYearMonthKey(expense.date) === currentMonth);
+  }, [currentMonth, sortedFilteredExpenses, exportRange]);
 
   const totals = useMemo(() => {
     const income = filteredExpenses
@@ -204,6 +220,8 @@ export default function ExpensesPage() {
   useEffect(() => {
     const urlFilters = getFiltersFromSearchParams(searchParams);
     setFilters((prev) => (filtersEqual(prev, urlFilters) ? prev : urlFilters));
+    const urlPeriodMode = getPeriodModeFromSearchParams(searchParams);
+    setPeriodMode((prev) => (prev === urlPeriodMode ? prev : urlPeriodMode));
   }, [searchParams]);
 
   useEffect(() => {
@@ -231,13 +249,15 @@ export default function ExpensesPage() {
     else params.delete('minAmount');
     if (filters.maxAmount) params.set('maxAmount', filters.maxAmount);
     else params.delete('maxAmount');
+    if (periodMode === 'this-month') params.set('period', periodMode);
+    else params.delete('period');
 
     const currentQuery = searchParams.toString();
     const nextQuery = params.toString();
     if (currentQuery !== nextQuery) {
       router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
     }
-  }, [filters, pathname, router, searchParams]);
+  }, [filters, pathname, periodMode, router, searchParams]);
 
   const handleExportCsv = async () => {
     if (exportableExpenses.length === 0) return;
@@ -275,6 +295,25 @@ export default function ExpensesPage() {
           <p className="text-muted-foreground">Manage and track your income and expenses.</p>
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <div className="inline-flex items-center rounded-md border border-border bg-background p-1">
+            <Button
+              type="button"
+              size="sm"
+              variant={periodMode === 'all-time' ? 'secondary' : 'ghost'}
+              onClick={() => setPeriodMode('all-time')}
+            >
+              All-time
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={periodMode === 'this-month' ? 'secondary' : 'ghost'}
+              onClick={() => setPeriodMode('this-month')}
+            >
+              This Month
+            </Button>
+          </div>
+
           <Button type="button" variant={isFilterOpen ? 'secondary' : 'outline'} onClick={() => setIsFilterOpen((prev) => !prev)}>
             <Filter className="mr-2 h-4 w-4" />
             Filter
@@ -312,6 +351,9 @@ export default function ExpensesPage() {
             Add Transaction
           </Button>
         </div>
+      </div>
+      <div className="flex items-center justify-end">
+        <PeriodModeBadge mode={periodMode} detail="Transactions" />
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -430,7 +472,7 @@ export default function ExpensesPage() {
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <p className="text-sm text-muted-foreground">{filteredExpenses.length} matching transactions</p>
+                  <p className="text-sm text-muted-foreground">{sortedFilteredExpenses.length} matching transactions</p>
                   <Button type="button" variant="outline" size="sm" onClick={clearFilters} disabled={activeFilterCount === 0}>
                     Clear filters
                   </Button>
@@ -440,7 +482,7 @@ export default function ExpensesPage() {
           ) : null}
 
           <Card className="overflow-hidden">
-            {filteredExpenses.length === 0 ? (
+            {sortedFilteredExpenses.length === 0 ? (
               <CardContent className="p-6">
                 <EmptyState
                   title={activeFilterCount > 0 ? 'No matching transactions' : 'No transactions yet'}
@@ -462,7 +504,7 @@ export default function ExpensesPage() {
               </CardContent>
             ) : (
               <div className="divide-y divide-border">
-                {filteredExpenses.map((expense) => (
+                {sortedFilteredExpenses.map((expense) => (
                   <div key={expense.id} className="flex items-center justify-between gap-4 p-4 sm:p-5">
                     <div className="min-w-0 space-y-1">
                       <p className="truncate font-medium">{expense.notes || expense.note || 'Transaction'}</p>
@@ -471,7 +513,7 @@ export default function ExpensesPage() {
                         <Badge variant={getTransactionType(expense) === 'income' ? 'default' : 'secondary'}>
                           {getTransactionType(expense) === 'income' ? 'Income' : 'Expense'}
                         </Badge>
-                        <span>{new Date(expense.date).toLocaleDateString()}</span>
+                        <span>{toSafeDate(expense.date).toLocaleDateString()}</span>
                       </div>
                     </div>
 

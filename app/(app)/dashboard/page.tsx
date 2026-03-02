@@ -13,6 +13,8 @@ import { Button } from '@/components/ui/button';
 import { useAiNudges } from '@/hooks/useAi';
 import { useBudgets, useCategories, useExpenses } from '@/hooks/useData';
 import { getCurrencySymbol } from '@/lib/currencies';
+import { toYearMonthKey } from '@/lib/dates';
+import { sortExpensesByRecency } from '@/lib/expenseSort';
 import { isExpenseTransaction, isIncomeTransaction } from '@/lib/transactions';
 
 export default function DashboardPage() {
@@ -44,28 +46,31 @@ export default function DashboardPage() {
   const isLoading = expensesLoading || budgetsLoading || categoriesLoading;
   const hasDataError = Boolean(expensesError || budgetsError || categoriesError);
 
-  const currentMonth = new Date().toISOString().slice(0, 7);
+  const currentMonth = toYearMonthKey(new Date());
 
   const currentMonthTransactions = useMemo(() => {
-    return expenses.filter((expense) => {
-      const dateStr = typeof expense.date === 'string' ? expense.date : expense.date.toISOString();
-      return dateStr.startsWith(currentMonth);
-    });
+    return expenses.filter((expense) => toYearMonthKey(expense.date) === currentMonth);
   }, [expenses, currentMonth]);
 
   const totalExpense = useMemo(() => {
+    return expenses
+      .filter((expense) => isExpenseTransaction(expense))
+      .reduce((sum, expense) => sum + expense.amount, 0);
+  }, [expenses]);
+
+  const totalIncome = useMemo(() => {
+    return expenses
+      .filter((expense) => isIncomeTransaction(expense))
+      .reduce((sum, expense) => sum + expense.amount, 0);
+  }, [expenses]);
+
+  const totalBalance = useMemo(() => totalIncome - totalExpense, [totalExpense, totalIncome]);
+
+  const currentMonthExpense = useMemo(() => {
     return currentMonthTransactions
       .filter((expense) => isExpenseTransaction(expense))
       .reduce((sum, expense) => sum + expense.amount, 0);
   }, [currentMonthTransactions]);
-
-  const totalIncome = useMemo(() => {
-    return currentMonthTransactions
-      .filter((expense) => isIncomeTransaction(expense))
-      .reduce((sum, expense) => sum + expense.amount, 0);
-  }, [currentMonthTransactions]);
-
-  const totalBalance = useMemo(() => totalIncome - totalExpense, [totalExpense, totalIncome]);
 
   const currentBudget = useMemo(() => {
     return budgets.find((budget) => budget.month === currentMonth);
@@ -73,21 +78,11 @@ export default function DashboardPage() {
 
   const remainingBudget = useMemo(() => {
     if (!currentBudget) return 0;
-    return currentBudget.total_amount - totalExpense;
-  }, [currentBudget, totalExpense]);
+    return currentBudget.total_amount - currentMonthExpense;
+  }, [currentBudget, currentMonthExpense]);
 
   const recentTransactions = useMemo(() => {
-    return [...expenses]
-      .sort((a, b) => {
-        const dateA = new Date(
-          typeof a.date === 'string' ? a.date : a.date.toISOString()
-        ).getTime();
-        const dateB = new Date(
-          typeof b.date === 'string' ? b.date : b.date.toISOString()
-        ).getTime();
-        return dateB - dateA;
-      })
-      .slice(0, 5);
+    return sortExpensesByRecency(expenses).slice(0, 5);
   }, [expenses]);
 
   const handleRetryDashboard = () => {
@@ -133,14 +128,14 @@ export default function DashboardPage() {
               <DashboardStatCard
                 title='Income'
                 value={`+${getCurrencySymbol('USD')}${totalIncome.toFixed(2)}`}
-                subtitle='Current month'
+                subtitle='All time'
                 badgeLabel='Money in'
                 valueClassName='text-emerald-600'
               />
               <DashboardStatCard
                 title='Expenses'
                 value={`-${getCurrencySymbol('USD')}${totalExpense.toFixed(2)}`}
-                subtitle='Current month'
+                subtitle='All time'
                 badgeLabel='Money out'
                 valueClassName='text-destructive'
               />
@@ -149,8 +144,8 @@ export default function DashboardPage() {
                 value={`${totalBalance >= 0 ? '+' : '-'}${getCurrencySymbol('USD')}${Math.abs(totalBalance).toFixed(2)}`}
                 subtitle={totalBalance >= 0 ? 'Net positive' : 'Net negative'}
                 badgeLabel={
-                  currentMonthTransactions.length > 0
-                    ? `${currentMonthTransactions.length} transactions`
+                  expenses.length > 0
+                    ? `${expenses.length} transactions`
                     : 'No transactions'
                 }
                 valueClassName={totalBalance >= 0 ? 'text-emerald-600' : 'text-destructive'}
@@ -165,7 +160,7 @@ export default function DashboardPage() {
             <BudgetHealthCard
               hasCurrentBudget={Boolean(currentBudget)}
               totalBudget={currentBudget?.total_amount ?? 0}
-              totalSpent={totalExpense}
+              totalSpent={currentMonthExpense}
               remainingBudget={remainingBudget}
             />
           </section>

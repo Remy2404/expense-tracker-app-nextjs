@@ -83,7 +83,36 @@ export const CATEGORY_ICON_DATA: Record<string, CategoryIconMeta> = {
 
 export const CATEGORY_ICON_OPTIONS = Object.keys(CATEGORY_ICON_DATA);
 
+const CATEGORY_ICON_ALIAS_MAP: Record<string, string> = {
+  // Legacy/mobile material keys
+  'food-apple': 'food',
+  'silverware-fork-knife': 'food',
+  restaurant: 'food',
+  flash: 'zap',
+  'lightning-bolt': 'zap',
+  movie: 'game',
+  'gamepad-variant': 'game',
+  'medical-bag': 'heart',
+  'home-city': 'home',
+  'youtube-subscription': 'sparkles',
+  'baby-carriage': 'baby',
+  paw: 'pet',
+  tools: 'briefcase',
+  'tshirt-crew': 'shopping',
+  bank: 'wallet',
+  'file-document-outline': 'wallet',
+  'hand-heart': 'gift',
+  cash: 'wallet',
+  'cash-multiple': 'wallet',
+  'cash-refund': 'sparkles',
+  'laptop-account': 'briefcase',
+  'dots-horizontal': 'tag',
+  'help-circle': 'tag',
+  'help-circle-outline': 'tag',
+};
+
 export const getCategoryIconComponent = (iconName?: string): LucideIcon => {
   if (!iconName) return Tag;
-  return CATEGORY_ICON_DATA[iconName]?.component ?? Tag;
+  const normalizedKey = CATEGORY_ICON_ALIAS_MAP[iconName.toLowerCase()] || iconName.toLowerCase();
+  return CATEGORY_ICON_DATA[normalizedKey]?.component ?? Tag;
 };

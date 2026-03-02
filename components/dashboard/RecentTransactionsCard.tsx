@@ -1,7 +1,10 @@
+import { useMemo } from 'react';
 import { EmptyState } from '@/components/state/EmptyState';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getCurrencySymbol } from '@/lib/currencies';
+import { toSafeDate } from '@/lib/dates';
+import { sortExpensesByRecency } from '@/lib/expenseSort';
 import { Expense } from '@/types';
 import { getSignedTransactionAmount, getTransactionType } from '@/lib/transactions';
 
@@ -14,14 +17,19 @@ export function RecentTransactionsCard({
   recentTransactions,
   onAddExpense,
 }: RecentTransactionsCardProps) {
+  const sortedRecentTransactions = useMemo(
+    () => sortExpensesByRecency(recentTransactions),
+    [recentTransactions]
+  );
+
   return (
     <Card className='h-full'>
       <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-4'>
         <CardTitle className='text-base'>Recent Transactions</CardTitle>
-        <Badge variant='secondary'>{recentTransactions.length}</Badge>
+        <Badge variant='secondary'>{sortedRecentTransactions.length}</Badge>
       </CardHeader>
       <CardContent>
-        {recentTransactions.length === 0 ? (
+        {sortedRecentTransactions.length === 0 ? (
           <EmptyState
             title='No recent transactions'
             description='Add your first transaction to start tracking monthly trends.'
@@ -30,7 +38,7 @@ export function RecentTransactionsCard({
           />
         ) : (
           <ul className='space-y-3' aria-label='Recent transactions list'>
-            {recentTransactions.map((expense) => (
+            {sortedRecentTransactions.map((expense) => (
               <li
                 key={expense.id}
                 className='flex items-center justify-between gap-3 rounded-lg border border-border/70 px-3 py-2.5'
@@ -38,8 +46,8 @@ export function RecentTransactionsCard({
                 <div className='min-w-0'>
                   <p className='truncate text-sm font-medium'>{expense.notes || expense.note || 'Transaction'}</p>
                   <div className='flex items-center gap-2 text-xs text-muted-foreground'>
-                    <time dateTime={new Date(expense.date).toISOString()}>
-                      {new Date(expense.date).toLocaleDateString()}
+                    <time dateTime={toSafeDate(expense.date).toISOString()}>
+                      {toSafeDate(expense.date).toLocaleDateString()}
                     </time>
                     <Badge variant={getTransactionType(expense) === 'income' ? 'default' : 'secondary'}>
                       {getTransactionType(expense) === 'income' ? 'Income' : 'Expense'}
