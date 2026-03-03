@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ExpensesPage from '@/app/(app)/expenses/page';
-import { useCategories, useDeleteExpense, useExpenses } from '@/hooks/useData';
+import { useCategories, useDeleteExpense, useExpenses, useFinanceSummary } from '@/hooks/useData';
 
 const replaceMock = jest.fn();
 let currentSearchParams = new URLSearchParams();
@@ -18,6 +18,7 @@ jest.mock('@/hooks/useData', () => ({
   useExpenses: jest.fn(),
   useCategories: jest.fn(),
   useDeleteExpense: jest.fn(),
+  useFinanceSummary: jest.fn(),
 }));
 
 jest.mock('@/components/AddExpenseModal', () => ({
@@ -41,6 +42,7 @@ jest.mock('@/lib/export-pdf', () => ({
 const mockUseExpenses = useExpenses as jest.Mock;
 const mockUseCategories = useCategories as jest.Mock;
 const mockUseDeleteExpense = useDeleteExpense as jest.Mock;
+const mockUseFinanceSummary = useFinanceSummary as jest.Mock;
 
 describe('ExpensesPage', () => {
   beforeEach(() => {
@@ -76,6 +78,7 @@ describe('ExpensesPage', () => {
       ],
     });
     mockUseDeleteExpense.mockReturnValue({ trigger: jest.fn() });
+    mockUseFinanceSummary.mockReturnValue({ summary: null });
   });
 
   it('hydrates filters from URL params and reflects filtered count', async () => {

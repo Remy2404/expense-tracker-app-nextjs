@@ -11,7 +11,7 @@ import { ErrorState } from '@/components/state/ErrorState';
 import { PageSkeleton } from '@/components/state/PageSkeleton';
 import { Button } from '@/components/ui/button';
 import { useAiNudges } from '@/hooks/useAi';
-import { useBudgets, useCategories, useExpenses } from '@/hooks/useData';
+import { useBudgets, useCategories, useExpenses, useFinanceSummary } from '@/hooks/useData';
 import { getCurrencySymbol } from '@/lib/currencies';
 import { toYearMonthKey } from '@/lib/dates';
 import { sortExpensesByRecency } from '@/lib/expenseSort';
@@ -24,6 +24,12 @@ export default function DashboardPage() {
     isError: expensesError,
     mutate: mutateExpenses,
   } = useExpenses();
+  const {
+    summary,
+    isLoading: summaryLoading,
+    isError: summaryError,
+    mutate: mutateSummary,
+  } = useFinanceSummary('all-time');
   const {
     budgets,
     isLoading: budgetsLoading,
@@ -43,8 +49,8 @@ export default function DashboardPage() {
     mutate: mutateNudges,
   } = useAiNudges();
 
-  const isLoading = expensesLoading || budgetsLoading || categoriesLoading;
-  const hasDataError = Boolean(expensesError || budgetsError || categoriesError);
+  const isLoading = expensesLoading || budgetsLoading || categoriesLoading || summaryLoading;
+  const hasDataError = Boolean(expensesError || budgetsError || categoriesError || summaryError);
 
   const currentMonth = toYearMonthKey(new Date());
 
@@ -52,19 +58,22 @@ export default function DashboardPage() {
     return expenses.filter((expense) => toYearMonthKey(expense.date) === currentMonth);
   }, [expenses, currentMonth]);
 
-  const totalExpense = useMemo(() => {
+  const localTotalExpense = useMemo(() => {
     return expenses
       .filter((expense) => isExpenseTransaction(expense))
       .reduce((sum, expense) => sum + expense.amount, 0);
   }, [expenses]);
 
-  const totalIncome = useMemo(() => {
+  const localTotalIncome = useMemo(() => {
     return expenses
       .filter((expense) => isIncomeTransaction(expense))
       .reduce((sum, expense) => sum + expense.amount, 0);
   }, [expenses]);
 
-  const totalBalance = useMemo(() => totalIncome - totalExpense, [totalExpense, totalIncome]);
+  const totalExpense = summary?.totalExpense ?? localTotalExpense;
+  const totalIncome = summary?.totalIncome ?? localTotalIncome;
+  const totalBalance = summary?.balance ?? totalIncome - totalExpense;
+  const transactionCount = summary?.transactionCount ?? expenses.length;
 
   const currentMonthExpense = useMemo(() => {
     return currentMonthTransactions
@@ -86,7 +95,7 @@ export default function DashboardPage() {
   }, [expenses]);
 
   const handleRetryDashboard = () => {
-    void Promise.all([mutateExpenses(), mutateBudgets(), mutateCategories()]);
+    void Promise.all([mutateExpenses(), mutateBudgets(), mutateCategories(), mutateSummary()]);
   };
 
   const handleRetryNudges = () => {
@@ -144,8 +153,8 @@ export default function DashboardPage() {
                 value={`${totalBalance >= 0 ? '+' : '-'}${getCurrencySymbol('USD')}${Math.abs(totalBalance).toFixed(2)}`}
                 subtitle={totalBalance >= 0 ? 'Net positive' : 'Net negative'}
                 badgeLabel={
-                  expenses.length > 0
-                    ? `${expenses.length} transactions`
+                  transactionCount > 0
+                    ? `${transactionCount} transactions`
                     : 'No transactions'
                 }
                 valueClassName={totalBalance >= 0 ? 'text-emerald-600' : 'text-destructive'}

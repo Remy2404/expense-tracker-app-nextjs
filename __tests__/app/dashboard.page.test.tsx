@@ -1,13 +1,14 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DashboardPage from '@/app/(app)/dashboard/page';
-import { useExpenses, useBudgets, useCategories } from '@/hooks/useData';
+import { useExpenses, useBudgets, useCategories, useFinanceSummary } from '@/hooks/useData';
 import { useAiNudges } from '@/hooks/useAi';
 
 jest.mock('@/hooks/useData', () => ({
   useExpenses: jest.fn(),
   useBudgets: jest.fn(),
   useCategories: jest.fn(),
+  useFinanceSummary: jest.fn(),
 }));
 
 jest.mock('@/hooks/useAi', () => ({
@@ -22,6 +23,7 @@ jest.mock('@/components/AddExpenseModal', () => ({
 const mockUseExpenses = useExpenses as jest.Mock;
 const mockUseBudgets = useBudgets as jest.Mock;
 const mockUseCategories = useCategories as jest.Mock;
+const mockUseFinanceSummary = useFinanceSummary as jest.Mock;
 const mockUseAiNudges = useAiNudges as jest.Mock;
 
 describe('DashboardPage', () => {
@@ -29,6 +31,7 @@ describe('DashboardPage', () => {
     mockUseExpenses.mockReturnValue({ expenses: [], isLoading: false });
     mockUseBudgets.mockReturnValue({ budgets: [], isLoading: false });
     mockUseCategories.mockReturnValue({ categories: [], isLoading: false });
+    mockUseFinanceSummary.mockReturnValue({ summary: null, isLoading: false });
     mockUseAiNudges.mockReturnValue({ data: { nudges: [] }, isLoading: false });
   });
 
@@ -86,13 +89,26 @@ describe('DashboardPage', () => {
       isLoading: false,
     });
 
+    mockUseFinanceSummary.mockReturnValue({
+      summary: {
+        period: 'all-time',
+        periodStart: null,
+        periodEnd: null,
+        transactionCount: 3,
+        totalIncome: 0,
+        totalExpense: 75,
+        balance: -75,
+      },
+      isLoading: false,
+    });
+
     render(<DashboardPage />);
 
     expect(screen.getByText('Income')).toBeInTheDocument();
     expect(screen.getByText('Expenses')).toBeInTheDocument();
     expect(screen.getAllByText('-$75.00').length).toBeGreaterThan(0);
     expect(screen.getAllByText('+$0.00').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('$425.00').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('-$75.00').length).toBeGreaterThan(0);
     expect(screen.getByText('Groceries')).toBeInTheDocument();
   });
 

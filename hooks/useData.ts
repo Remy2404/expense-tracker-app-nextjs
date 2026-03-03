@@ -3,6 +3,7 @@ import useSWR from 'swr';
 import useSWRMutation from 'swr/mutation';
 import { useSWRConfig } from 'swr';
 import { supabase } from '@/lib/supabase';
+import { financeApi, type FinanceSummaryPeriod, type FinanceSummaryResponse } from '@/lib/api/finance.api';
 import { Expense, Category, CategoryType, Budget, RecurringExpense } from '@/types';
 import { Goal, GoalTransaction } from '@/types/goals';
 import { useAuth } from '@/contexts/AuthContext';
@@ -81,12 +82,24 @@ const toExpenseWritePayload = (
 
 // Generic fetcher using Supabase client
 const fetcher = async (table: string) => {
-  const baseQuery = supabase.from(table).select('*').neq('is_deleted', true);
+  // Get the current user from auth context
+  const { supabase } = await import('@/lib/supabase');
+  const { data: { user } } = await supabase.auth.getUser();
+
+  let baseQuery = supabase.from(table).select('*').neq('is_deleted', true);
+
+  // Filter by user for user-specific tables
+  if (user && ['expenses', 'categories', 'budgets', 'recurring_expenses', 'savings_goals'].includes(table)) {
+    // Note: supabase.auth.getUser() returns the user from the Firebase JWT token
+    // so user.id corresponds to the Firebase UID which matches firebase_uid in the database
+    baseQuery = baseQuery.eq('firebase_uid', user.id);
+  }
+
   const query =
     table === 'expenses'
       ? baseQuery
-          .order('updated_at', { ascending: false })
           .order('created_at', { ascending: false })
+          .order('updated_at', { ascending: false })
           .order('date', { ascending: false })
           .order('id', { ascending: false })
       : baseQuery;
@@ -109,6 +122,24 @@ export function useExpenses() {
 
   return {
     expenses: data || [],
+    isLoading,
+    isError: error,
+    mutate,
+  };
+}
+
+export function useFinanceSummary(period: FinanceSummaryPeriod = 'all-time') {
+  const { data, error, isLoading, mutate } = useSWR<FinanceSummaryResponse>(
+    ['finance-summary', period],
+    () => financeApi.getSummary(period),
+    {
+      refreshInterval: 5000,
+      revalidateOnFocus: true,
+    }
+  );
+
+  return {
+    summary: data ?? null,
     isLoading,
     isError: error,
     mutate,

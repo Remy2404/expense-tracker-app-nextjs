@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ReadonlyURLSearchParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Download, Edit2, FileText, Filter, Loader2, Plus, Trash2, TriangleAlert } from 'lucide-react';
-import { useExpenses, useCategories, useDeleteExpense } from '@/hooks/useData';
+import { useExpenses, useCategories, useDeleteExpense, useFinanceSummary } from '@/hooks/useData';
 import { AddExpenseModal } from '@/components/AddExpenseModal';
 import { DeleteExpenseDialog } from '@/components/expenses/DeleteExpenseDialog';
 import { EmptyState } from '@/components/state/EmptyState';
@@ -102,6 +102,8 @@ export default function ExpensesPage() {
   const [filters, setFilters] = useState<ExpenseFilters>(() =>
     getFiltersFromSearchParams(new URLSearchParams(searchParams.toString()))
   );
+  const summaryPeriod = periodMode === 'this-month' ? 'this-month' : 'all-time';
+  const { summary } = useFinanceSummary(summaryPeriod);
 
   const currentMonth = toYearMonthKey(new Date());
   const filteredCategories = useMemo(() => {
@@ -152,7 +154,18 @@ export default function ExpensesPage() {
     return sortedFilteredExpenses.filter((expense) => toYearMonthKey(expense.date) === currentMonth);
   }, [currentMonth, sortedFilteredExpenses, exportRange]);
 
+  const activeFilterCount = getActiveFilterCount(filters);
+
   const totals = useMemo(() => {
+    const canUseSummary = activeFilterCount === 0 && summary !== null;
+    if (canUseSummary) {
+      return {
+        income: summary.totalIncome,
+        expense: summary.totalExpense,
+        balance: summary.balance,
+      };
+    }
+
     const income = filteredExpenses
       .filter((expense) => isIncomeTransaction(expense))
       .reduce((sum, expense) => sum + expense.amount, 0);
@@ -164,9 +177,10 @@ export default function ExpensesPage() {
       expense,
       balance: income - expense,
     };
-  }, [filteredExpenses]);
+  }, [activeFilterCount, filteredExpenses, summary]);
 
-  const activeFilterCount = getActiveFilterCount(filters);
+  const transactionCount =
+    activeFilterCount === 0 && summary !== null ? summary.transactionCount : sortedFilteredExpenses.length;
 
   const getCategoryName = (categoryId: string | undefined) => {
     if (!categoryId) return 'Uncategorized';
@@ -383,6 +397,7 @@ export default function ExpensesPage() {
               {getCurrencySymbol('USD')}
               {Math.abs(totals.balance).toFixed(2)}
             </p>
+            <p className="text-xs text-muted-foreground">{transactionCount} transactions</p>
           </CardContent>
         </Card>
       </div>
