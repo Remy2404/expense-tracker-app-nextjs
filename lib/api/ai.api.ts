@@ -1,6 +1,7 @@
 import {
   AiCategorizeRequest,
   AiCategorizeResponse,
+  AiChatHistoryResponse,
   AiChatRequest,
   AiChatResponse,
   AiCorrectRequest,
@@ -13,6 +14,7 @@ import {
   AiScenarioRequest,
   AiScenarioResult,
   NudgesResponse,
+  RealtimeSessionResponse,
 } from '@/types/ai';
 import { aiHttpClient, normalizeAiApiError } from './http';
 
@@ -192,6 +194,29 @@ const validateChat = (data: unknown): AiChatResponse => {
   return payload as unknown as AiChatResponse;
 };
 
+const validateChatHistory = (data: unknown): AiChatHistoryResponse => {
+  const payload = assertObject(data, '/api/ai/chat/history');
+  if (!Array.isArray(payload.messages)) {
+    throw new Error('Invalid /api/ai/chat/history response: "messages" must be an array.');
+  }
+  (payload.messages as unknown[]).forEach((item) => {
+    const message = assertObject(item, '/api/ai/chat/history');
+    assertString(message, 'id', '/api/ai/chat/history');
+    assertString(message, 'role', '/api/ai/chat/history');
+    assertString(message, 'content', '/api/ai/chat/history');
+    assertString(message, 'created_at', '/api/ai/chat/history');
+  });
+  return payload as unknown as AiChatHistoryResponse;
+};
+
+const validateRealtimeSession = (data: unknown): RealtimeSessionResponse => {
+  const payload = assertObject(data, '/api/realtime/session');
+  assertString(payload, 'token', '/api/realtime/session');
+  assertString(payload, 'socket_url', '/api/realtime/session');
+  assertNumber(payload, 'expires_at_epoch_seconds', '/api/realtime/session');
+  return payload as unknown as RealtimeSessionResponse;
+};
+
 const validateInsights = (data: unknown): AiInsightsResponse => {
   const payload = assertObject(data, '/api/ai/insights');
   assertString(payload, 'insight_type', '/api/ai/insights');
@@ -267,6 +292,35 @@ export const aiApi = {
     try {
       const response = await aiHttpClient.post('/api/ai/chat', request);
       return validateChat(response.data);
+    } catch (error) {
+      throw normalizeAiApiError(error);
+    }
+  },
+
+  async streamChat(request: AiChatRequest): Promise<AiChatResponse> {
+    try {
+      const response = await aiHttpClient.post('/api/ai/chat/stream', request);
+      return validateChat(response.data);
+    } catch (error) {
+      throw normalizeAiApiError(error);
+    }
+  },
+
+  async getChatHistory(limit = 40): Promise<AiChatHistoryResponse> {
+    try {
+      const response = await aiHttpClient.get('/api/ai/chat/history', {
+        params: { limit },
+      });
+      return validateChatHistory(response.data);
+    } catch (error) {
+      throw normalizeAiApiError(error);
+    }
+  },
+
+  async getRealtimeSession(): Promise<RealtimeSessionResponse> {
+    try {
+      const response = await aiHttpClient.get('/api/realtime/session');
+      return validateRealtimeSession(response.data);
     } catch (error) {
       throw normalizeAiApiError(error);
     }

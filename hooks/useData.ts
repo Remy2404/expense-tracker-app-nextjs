@@ -4,19 +4,39 @@ import useSWRMutation from 'swr/mutation';
 import { useSWRConfig } from 'swr';
 import { supabase } from '@/lib/supabase';
 import { financeApi, type FinanceSummaryPeriod, type FinanceSummaryResponse } from '@/lib/api/finance.api';
+import {
+  syncApi,
+  type SyncPushRequest,
+  type SyncCategoryItem,
+  type SyncExpenseItem,
+  type SyncBudgetItem,
+  type SyncCategoryBudgetItem,
+  type SyncGoalItem,
+  type SyncGoalTransactionItem,
+  type SyncRecurringItem,
+} from '@/lib/api/sync.api';
 import { Expense, Category, CategoryType, Budget, RecurringExpense } from '@/types';
 import { Goal, GoalTransaction } from '@/types/goals';
 import { useAuth } from '@/contexts/AuthContext';
 import { MOBILE_DEFAULT_CATEGORIES } from '@/constants/defaultCategories';
-import {
-  DEFAULT_CATEGORY_TYPE,
-  DEFAULT_TRANSACTION_TYPE,
-  getCategoryType,
-  getTransactionType,
-} from '@/lib/transactions';
+import { DEFAULT_TRANSACTION_TYPE, getCategoryType, getTransactionType } from '@/lib/transactions';
 
 type CategoryWriteInput = Partial<Category> & {
   category_type?: string | null;
+};
+
+type ExpenseWriteInput = Partial<Expense> & {
+  transaction_type?: string | null;
+  note_summary?: string | null;
+};
+
+type BudgetRecord = Budget & {
+  category_budgets?: SyncCategoryBudgetItem[];
+};
+
+type RecurringWriteInput = RecurringExpense & {
+  retry_count?: number | null;
+  last_error?: string | null;
 };
 
 const normalizeCategory = (category: CategoryWriteInput): Category => {
@@ -28,33 +48,6 @@ const normalizeCategory = (category: CategoryWriteInput): Category => {
   } as Category;
 };
 
-const toCategoryInsertPayload = (category: CategoryWriteInput) => {
-  const { type, ...rest } = category;
-  return {
-    ...rest,
-    category_type: getCategoryType({
-      type: type as CategoryType | undefined,
-      category_type: category.category_type as CategoryType | undefined,
-    }).toUpperCase(),
-  };
-};
-
-const toCategoryUpdatePayload = (category: CategoryWriteInput) => {
-  const { type, ...rest } = category;
-  if (type === undefined && category.category_type === undefined) return rest;
-  return {
-    ...rest,
-    category_type: getCategoryType({
-      type: type as CategoryType | undefined,
-      category_type: category.category_type as CategoryType | undefined,
-    }).toUpperCase(),
-  };
-};
-
-type ExpenseWriteInput = Partial<Expense> & {
-  transaction_type?: string | null;
-};
-
 const normalizeExpense = (expense: ExpenseWriteInput): Expense => {
   const resolvedType = getTransactionType(expense as Pick<Expense, 'transaction_type'>);
   return {
@@ -63,35 +56,15 @@ const normalizeExpense = (expense: ExpenseWriteInput): Expense => {
   } as Expense;
 };
 
-const toExpenseWritePayload = (
-  expense: ExpenseWriteInput,
-  options?: { includeDefaultType?: boolean }
-) => {
-  const { transaction_type, ...rest } = expense;
-  if (transaction_type === undefined && !options?.includeDefaultType) {
-    return rest;
-  }
-  const normalizedType = getTransactionType({
-    transaction_type: (transaction_type ?? DEFAULT_TRANSACTION_TYPE) as Expense['transaction_type'],
-  });
-  return {
-    ...rest,
-    transaction_type: normalizedType.toUpperCase(),
-  };
-};
-
-// Generic fetcher using Supabase client
 const fetcher = async (table: string) => {
-  // Get the current user from auth context
-  const { supabase } = await import('@/lib/supabase');
-  const { data: { user } } = await supabase.auth.getUser();
+  const { supabase: client } = await import('@/lib/supabase');
+  const {
+    data: { user },
+  } = await client.auth.getUser();
 
-  let baseQuery = supabase.from(table).select('*').neq('is_deleted', true);
+  let baseQuery = client.from(table).select('*').neq('is_deleted', true);
 
-  // Filter by user for user-specific tables
   if (user && ['expenses', 'categories', 'budgets', 'recurring_expenses', 'savings_goals'].includes(table)) {
-    // Note: supabase.auth.getUser() returns the user from the Firebase JWT token
-    // so user.id corresponds to the Firebase UID which matches firebase_uid in the database
     baseQuery = baseQuery.eq('firebase_uid', user.id);
   }
 
@@ -103,6 +76,7 @@ const fetcher = async (table: string) => {
           .order('date', { ascending: false })
           .order('id', { ascending: false })
       : baseQuery;
+
   const { data, error } = await query;
   if (error) throw error;
   if (table === 'categories') {
@@ -114,9 +88,216 @@ const fetcher = async (table: string) => {
   return data;
 };
 
+const nowIso = () => new Date().toISOString();
+
+const createUuid = (): string => {
+  const uuid = globalThis.crypto?.randomUUID?.();
+  if (!uuid) {
+    throw new Error('crypto.randomUUID is unavailable in this environment.');
+  }
+  return uuid;
+};
+
+const toIsoString = (value: string | Date | null | undefined): string | null => {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.toISOString();
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+};
+
+const toRequiredIsoString = (value: string | Date | null | undefined, fallback = nowIso()): string => {
+  return toIsoString(value) ?? fallback;
+};
+
+const createSyncPayload = (): SyncPushRequest => ({
+  categories: [],
+  expenses: [],
+  budgets: [],
+  goals: [],
+  recurring: [],
+});
+
+const pushSyncChange = async (changes: Partial<SyncPushRequest>) => {
+  await syncApi.pushChanges({
+    ...createSyncPayload(),
+    ...changes,
+  });
+};
+
+const revalidateFinanceSummary = (mutate: ReturnType<typeof useSWRConfig>['mutate']) => {
+  void mutate((key: unknown) => Array.isArray(key) && key[0] === 'finance-summary');
+};
+
+const fetchSingle = async <T>(table: string, id: string): Promise<T> => {
+  const { data, error } = await supabase.from(table).select('*').eq('id', id).single();
+  if (error) throw error;
+  return data as T;
+};
+
+const fetchCategoryBudgetsByBudgetId = async (budgetId: string): Promise<SyncCategoryBudgetItem[]> => {
+  const { data, error } = await supabase
+    .from('category_budgets')
+    .select('category_id, amount')
+    .eq('budget_id', budgetId);
+  if (error) throw error;
+  return (data || []).map((item) => ({
+    category_id: item.category_id ?? null,
+    amount: Number(item.amount ?? 0),
+  }));
+};
+
+const fetchGoalTransactionsByGoalId = async (goalId: string): Promise<GoalTransaction[]> => {
+  const { data, error } = await supabase
+    .from('goal_transactions')
+    .select('*')
+    .eq('goal_id', goalId)
+    .order('date', { ascending: false })
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false });
+  if (error) throw error;
+  return (data || []) as GoalTransaction[];
+};
+
+const toSyncCategoryItem = (category: CategoryWriteInput): SyncCategoryItem => {
+  const createdAt = toRequiredIsoString(category.created_at);
+  const updatedAt = toRequiredIsoString(category.updated_at, createdAt);
+  return {
+    id: category.id || createUuid(),
+    name: category.name || 'Category',
+    icon: category.icon || 'wallet',
+    color: category.color || '#64748b',
+    is_default: Boolean(category.is_default),
+    category_type: getCategoryType(category as Pick<Category, 'type' | 'category_type'>).toUpperCase() as SyncCategoryItem['category_type'],
+    sort_order: category.sort_order ?? null,
+    is_deleted: Boolean(category.is_deleted),
+    deleted_at: toIsoString(category.deleted_at),
+    retry_count: category.retry_count ?? null,
+    last_error: category.last_error ?? null,
+    created_at: createdAt,
+    updated_at: updatedAt,
+    synced_at: toIsoString(category.synced_at),
+    version: null,
+  };
+};
+
+const toSyncExpenseItem = (expense: ExpenseWriteInput): SyncExpenseItem => {
+  const createdAt = toRequiredIsoString(expense.created_at);
+  const updatedAt = toRequiredIsoString(expense.updated_at, createdAt);
+  return {
+    id: expense.id || createUuid(),
+    amount: Number(expense.amount ?? 0),
+    transaction_type: getTransactionType({
+      transaction_type: (expense.transaction_type ?? DEFAULT_TRANSACTION_TYPE) as Expense['transaction_type'],
+    }).toUpperCase() as SyncExpenseItem['transaction_type'],
+    category_id: expense.category_id ?? null,
+    date: toRequiredIsoString(expense.date),
+    notes: expense.notes ?? expense.note ?? null,
+    merchant: expense.merchant ?? null,
+    note_summary: expense.note_summary ?? null,
+    ai_category_id: expense.ai_category_id ?? null,
+    ai_confidence: expense.ai_confidence ?? null,
+    ai_source: expense.ai_source ?? null,
+    ai_last_updated: toIsoString(expense.ai_last_updated),
+    recurring_expense_id: expense.recurring_expense_id ?? null,
+    receipt_paths: expense.receipt_paths ?? [],
+    currency: expense.currency ?? null,
+    original_amount: expense.original_amount ?? null,
+    exchange_rate: expense.exchange_rate ?? null,
+    rate_source: expense.rate_source ?? null,
+    created_at: createdAt,
+    updated_at: updatedAt,
+    synced_at: toIsoString(expense.synced_at),
+    is_deleted: Boolean(expense.is_deleted),
+    deleted_at: toIsoString(expense.deleted_at),
+    retry_count: expense.retry_count ?? null,
+    last_error: expense.last_error ?? null,
+    version: null,
+  };
+};
+
+const toSyncBudgetItem = (budget: BudgetRecord, categoryBudgets: SyncCategoryBudgetItem[] = []): SyncBudgetItem => {
+  const createdAt = toRequiredIsoString(budget.created_at);
+  const updatedAt = toRequiredIsoString(budget.updated_at, createdAt);
+  return {
+    id: budget.id,
+    month: budget.month,
+    total_amount: Number(budget.total_amount ?? 0),
+    category_budgets: categoryBudgets,
+    created_at: createdAt,
+    updated_at: updatedAt,
+    synced_at: toIsoString(budget.synced_at),
+    is_deleted: Boolean(budget.is_deleted),
+    deleted_at: toIsoString(budget.deleted_at),
+    retry_count: budget.retry_count ?? null,
+    last_error: budget.last_error ?? null,
+    version: null,
+  };
+};
+
+const toSyncGoalTransactionItem = (transaction: GoalTransaction): SyncGoalTransactionItem => ({
+  id: transaction.id || createUuid(),
+  amount: Number(transaction.amount),
+  type: transaction.type,
+  note: transaction.note ?? null,
+  date: toRequiredIsoString(transaction.date),
+});
+
+const toSyncGoalItem = (goal: Goal, transactions: GoalTransaction[]): SyncGoalItem => {
+  const createdAt = toRequiredIsoString(goal.created_at);
+  const updatedAt = toRequiredIsoString(goal.updated_at, createdAt);
+  return {
+    id: goal.id,
+    name: goal.name,
+    target_amount: Number(goal.target_amount ?? 0),
+    current_amount: Number(goal.current_amount ?? 0),
+    deadline: toIsoString(goal.deadline),
+    color: goal.color,
+    icon: goal.icon,
+    is_archived: Boolean(goal.is_archived),
+    transactions: transactions.map(toSyncGoalTransactionItem),
+    created_at: createdAt,
+    updated_at: updatedAt,
+    synced_at: toIsoString(goal.synced_at),
+    is_deleted: Boolean(goal.is_deleted),
+    deleted_at: toIsoString(goal.deleted_at),
+    retry_count: goal.retry_count ?? null,
+    last_error: goal.last_error ?? null,
+    version: null,
+  };
+};
+
+const toSyncRecurringItem = (recurring: RecurringWriteInput): SyncRecurringItem => {
+  const createdAt = toRequiredIsoString(recurring.created_at);
+  const updatedAt = toRequiredIsoString(recurring.updated_at, createdAt);
+  return {
+    id: recurring.id,
+    amount: Number(recurring.amount ?? 0),
+    category_id: recurring.category_id ?? null,
+    notes: recurring.notes ?? null,
+    frequency: recurring.frequency,
+    currency: recurring.currency ?? null,
+    original_amount: recurring.original_amount ?? null,
+    exchange_rate: recurring.exchange_rate ?? null,
+    start_date: toRequiredIsoString(recurring.start_date),
+    end_date: toIsoString(recurring.end_date),
+    last_generated: toIsoString(recurring.last_generated),
+    next_due_date: toRequiredIsoString(recurring.next_due_date),
+    is_active: recurring.is_active,
+    notification_enabled: recurring.notification_enabled,
+    notification_days_before: recurring.notification_days_before ?? null,
+    created_at: createdAt,
+    updated_at: updatedAt,
+    synced_at: toIsoString(recurring.synced_at),
+    is_deleted: Boolean(recurring.is_deleted),
+    deleted_at: toIsoString(recurring.deleted_at),
+    retry_count: recurring.retry_count ?? null,
+    last_error: recurring.last_error ?? null,
+    version: null,
+  };
+};
+
 export function useExpenses() {
   const { data, error, isLoading, mutate } = useSWR<Expense[]>('expenses', fetcher, {
-    refreshInterval: 5000,
     revalidateOnFocus: true,
   });
 
@@ -129,14 +310,9 @@ export function useExpenses() {
 }
 
 export function useFinanceSummary(period: FinanceSummaryPeriod = 'all-time') {
-  const { data, error, isLoading, mutate } = useSWR<FinanceSummaryResponse>(
-    ['finance-summary', period],
-    () => financeApi.getSummary(period),
-    {
-      refreshInterval: 5000,
-      revalidateOnFocus: true,
-    }
-  );
+  const { data, error, isLoading, mutate } = useSWR<FinanceSummaryResponse>(['finance-summary', period], () => financeApi.getSummary(period), {
+    revalidateOnFocus: true,
+  });
 
   return {
     summary: data ?? null,
@@ -152,104 +328,47 @@ export function useCategories() {
   const inFlightRef = useRef(false);
   const { data, error, isLoading, mutate } = useSWR<Category[]>('categories', fetcher);
 
-  // Helper to ensure profile exists before seeding
-  const ensureProfileExists = async (firebaseUid: string) => {
-    // Check if profile exists
-    const { data: existingProfile } = await supabase
-      .from('profiles')
-      .select('firebase_uid')
-      .eq('firebase_uid', firebaseUid)
-      .single();
-
-    if (existingProfile) return true;
-
-    // Create profile if it doesn't exist
-    const { error: insertError } = await supabase.from('profiles').insert({
-      firebase_uid: firebaseUid,
-    });
-
-    if (insertError) {
-      console.warn('Failed to create profile:', insertError.message);
-      return false;
-    }
-
-    return true;
-  };
-
   useEffect(() => {
-    // Don't run if: no user, still loading, no data, or already processing
-    if (!user?.uid || isLoading || !data) return;
+    if (!user?.uid || isLoading || !data || inFlightRef.current) return;
 
-    // Skip if already seeded for this user+count combination
     const currentKey = `${user.uid}:${data.length}`;
     if (seededRef.current === currentKey) return;
 
-    // Skip if currently inserting
-    if (inFlightRef.current) return;
-
-    // Get existing category names (case-insensitive)
-    const existingNames = new Set(data.map((cat) => cat.name.trim().toLowerCase()));
-
-    // Find missing default categories
+    const existingNames = new Set(data.map((category) => category.name.trim().toLowerCase()));
     const missingDefaults = MOBILE_DEFAULT_CATEGORIES.filter(
-      (defaultCat) => !existingNames.has(defaultCat.name.trim().toLowerCase())
+      (defaultCategory) => !existingNames.has(defaultCategory.name.trim().toLowerCase())
     );
 
-    // If all defaults exist, mark as seeded and return
     if (missingDefaults.length === 0) {
       seededRef.current = currentKey;
       return;
     }
 
-    // Mark as in-flight to prevent duplicate calls
     inFlightRef.current = true;
-
     const seedDefaults = async () => {
       try {
-        // First ensure profile exists (required for foreign key)
-        const profileReady = await ensureProfileExists(user.uid);
-        if (!profileReady) {
-          console.warn('Profile not ready, skipping category seeding');
-          inFlightRef.current = false;
-          seededRef.current = currentKey;
-          return;
-        }
-
-        // Prepare payload with firebase_uid
-        const payload = missingDefaults.map((category) => ({
-          ...toCategoryInsertPayload(category),
-          firebase_uid: user.uid,
-        }));
-
-        // Try bulk insert first
-        const { error: insertError } = await supabase.from('categories').insert(payload);
-
-        if (insertError) {
-          console.warn('Bulk insert failed, trying one-by-one:', insertError.message);
-          // Fallback: insert one-by-one so partial success is possible under stricter DB/RLS constraints
-          for (const category of payload) {
-            const { error: singleInsertError } = await supabase.from('categories').insert(category);
-            if (singleInsertError) {
-              console.warn('Skip default category seed', {
-                name: category.name,
-                message: singleInsertError.message,
-                code: singleInsertError.code,
-              });
-            }
-          }
-        }
-
-        // Update the cache to reflect the new categories
-        mutate();
-      } catch (err) {
-        console.error('Error seeding default categories:', err);
+        const timestamp = nowIso();
+        await pushSyncChange({
+          categories: missingDefaults.map((category) =>
+            toSyncCategoryItem({
+              ...category,
+              id: createUuid(),
+              is_default: category.is_default ?? true,
+              created_at: timestamp,
+              updated_at: timestamp,
+            })
+          ),
+        });
+        await mutate();
+      } catch (seedError) {
+        console.error('Error seeding default categories:', seedError);
       } finally {
         inFlightRef.current = false;
         seededRef.current = currentKey;
       }
     };
 
-    seedDefaults();
+    void seedDefaults();
   }, [user?.uid, data, isLoading, mutate]);
 
   return {
@@ -262,7 +381,6 @@ export function useCategories() {
 
 export function useBudgets() {
   const { data, error, isLoading, mutate } = useSWR<Budget[]>('budgets', fetcher);
-
   return {
     budgets: data || [],
     isLoading,
@@ -273,73 +391,66 @@ export function useBudgets() {
 
 export function useAddBudget() {
   const { mutate } = useSWRConfig();
-  const { user } = useAuth();
-  return useSWRMutation(
-    'budgets',
-    async (_key, { arg }: { arg: Omit<Budget, 'id' | 'created_at' | 'updated_at' | 'sync_status' | 'synced_at' | 'is_deleted'> }) => {
-      if (!user?.uid) throw new Error('User not authenticated');
-      const payload = { ...arg, firebase_uid: user.uid };
-      const { data, error } = await supabase.from('budgets').insert(payload).select().single();
-      if (error) throw error;
-      return data;
-    },
-    {
-      onSuccess: () => {
-        mutate('budgets');
-      },
-    }
-  );
+  return useSWRMutation('budgets', async (_key, { arg }: { arg: Omit<Budget, 'id' | 'created_at' | 'updated_at' | 'sync_status' | 'synced_at' | 'is_deleted'> }) => {
+    const timestamp = nowIso();
+    const budget: BudgetRecord = {
+      id: createUuid(),
+      ...arg,
+      created_at: timestamp,
+      updated_at: timestamp,
+      is_deleted: false,
+    };
+    await pushSyncChange({ budgets: [toSyncBudgetItem(budget)] });
+    await mutate('budgets');
+    revalidateFinanceSummary(mutate);
+    return budget;
+  });
 }
 
 export function useEditBudget() {
   const { mutate } = useSWRConfig();
-  return useSWRMutation(
-    'budgets',
-    async (_key, { arg }: { arg: { id: string } & Partial<Omit<Budget, 'id' | 'created_at' | 'updated_at'>> }) => {
-      const { id, ...updates } = arg;
-      const { data, error } = await supabase
-        .from('budgets')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
-    },
-    {
-      onSuccess: () => {
-        mutate('budgets');
-      },
-    }
-  );
+  return useSWRMutation('budgets', async (_key, { arg }: { arg: { id: string } & Partial<Omit<Budget, 'id' | 'created_at' | 'updated_at'>> }) => {
+    const existingBudget = await fetchSingle<Budget>('budgets', arg.id);
+    const existingCategoryBudgets = await fetchCategoryBudgetsByBudgetId(arg.id);
+    const updatedBudget: BudgetRecord = {
+      ...existingBudget,
+      ...arg,
+      updated_at: nowIso(),
+    };
+    await pushSyncChange({ budgets: [toSyncBudgetItem(updatedBudget, existingCategoryBudgets)] });
+    await mutate('budgets');
+    revalidateFinanceSummary(mutate);
+    return updatedBudget;
+  });
 }
 
 export function useDeleteBudget() {
   const { mutate } = useSWRConfig();
-  return useSWRMutation(
-    'budgets',
-    async (_key, { arg }: { arg: { id: string } }) => {
-      const { error } = await supabase
-        .from('budgets')
-        .update({ is_deleted: true, deleted_at: new Date().toISOString() })
-        .eq('id', arg.id);
-      if (error) throw error;
-      return true;
-    },
-    {
-      onSuccess: () => {
-        mutate('budgets');
-      },
-    }
-  );
+  return useSWRMutation('budgets', async (_key, { arg }: { arg: { id: string } }) => {
+    const existingBudget = await fetchSingle<Budget>('budgets', arg.id);
+    const existingCategoryBudgets = await fetchCategoryBudgetsByBudgetId(arg.id);
+    const deletedAt = nowIso();
+    await pushSyncChange({
+      budgets: [
+        toSyncBudgetItem(
+          {
+            ...existingBudget,
+            is_deleted: true,
+            deleted_at: deletedAt,
+            updated_at: deletedAt,
+          },
+          existingCategoryBudgets
+        ),
+      ],
+    });
+    await mutate('budgets');
+    revalidateFinanceSummary(mutate);
+    return true;
+  });
 }
 
 export function useGoals() {
-  const { data, error, isLoading, mutate } = useSWR<Goal[]>(
-    'savings_goals',
-    fetcher
-  );
-
+  const { data, error, isLoading, mutate } = useSWR<Goal[]>('savings_goals', fetcher);
   return {
     goals: data || [],
     isLoading,
@@ -348,23 +459,14 @@ export function useGoals() {
   };
 }
 
-// Fetch a single month budget if needed
 export function useBudgetByMonth(month: string) {
   const fetcherByMonth = async () => {
-    const { data, error } = await supabase
-      .from('budgets')
-      .select('*')
-      .eq('month', month)
-      .single();
-    if (error && error.code !== 'PGRST116') throw error; // PGRST116 is no rows
+    const { data, error } = await supabase.from('budgets').select('*').eq('month', month).single();
+    if (error && error.code !== 'PGRST116') throw error;
     return data as Budget | null;
   };
 
-  const { data, error, isLoading, mutate } = useSWR(
-    month ? ['budgets', month] : null,
-    fetcherByMonth
-  );
-
+  const { data, error, isLoading, mutate } = useSWR(month ? ['budgets', month] : null, fetcherByMonth);
   return {
     budget: data,
     isLoading,
@@ -375,194 +477,162 @@ export function useBudgetByMonth(month: string) {
 
 export function useAddCategory() {
   const { mutate } = useSWRConfig();
-  const { user } = useAuth();
-  return useSWRMutation(
-    'categories',
-    async (_key, { arg }: { arg: Omit<Category, 'id' | 'sync_status' | 'is_deleted'> }) => {
-      if (!user?.uid) throw new Error('User not authenticated');
-      const payload = { ...toCategoryInsertPayload(arg), firebase_uid: user.uid };
-      const { data, error } = await supabase.from('categories').insert(payload).select().single();
-      if (error) throw error;
-      return normalizeCategory(data as CategoryWriteInput);
-    },
-    {
-      onSuccess: () => {
-        mutate('categories');
-      },
-    }
-  );
+  return useSWRMutation('categories', async (_key, { arg }: { arg: Omit<Category, 'id' | 'sync_status' | 'is_deleted'> }) => {
+    const timestamp = nowIso();
+    const category: CategoryWriteInput = {
+      ...arg,
+      id: createUuid(),
+      created_at: timestamp,
+      updated_at: timestamp,
+      is_deleted: false,
+    };
+    await pushSyncChange({ categories: [toSyncCategoryItem(category)] });
+    await mutate('categories');
+    return normalizeCategory(category);
+  });
 }
 
 export function useEditCategory() {
   const { mutate } = useSWRConfig();
-  return useSWRMutation(
-    'categories',
-    async (_key, { arg }: { arg: { id: string } & Partial<Omit<Category, 'id'>> }) => {
-      const { id, ...updates } = arg;
-      const payload = toCategoryUpdatePayload(updates);
-      const { data, error } = await supabase
-        .from('categories')
-        .update(payload)
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
-      return normalizeCategory(data as CategoryWriteInput);
-    },
-    {
-      onSuccess: () => {
-        mutate('categories');
-      },
-    }
-  );
+  return useSWRMutation('categories', async (_key, { arg }: { arg: { id: string } & Partial<Omit<Category, 'id'>> }) => {
+    const existingCategory = await fetchSingle<Category>('categories', arg.id);
+    const updatedCategory: CategoryWriteInput = {
+      ...existingCategory,
+      ...arg,
+      updated_at: nowIso(),
+    };
+    await pushSyncChange({ categories: [toSyncCategoryItem(updatedCategory)] });
+    await mutate('categories');
+    return normalizeCategory(updatedCategory);
+  });
 }
 
 export function useDeleteCategory() {
   const { mutate } = useSWRConfig();
-  return useSWRMutation(
-    'categories',
-    async (_key, { arg }: { arg: { id: string } }) => {
-      const { error } = await supabase
-        .from('categories')
-        .update({ is_deleted: true, deleted_at: new Date().toISOString() })
-        .eq('id', arg.id);
-      if (error) throw error;
-      return true;
-    },
-    {
-      onSuccess: () => {
-        mutate('categories');
-      },
-    }
-  );
+  return useSWRMutation('categories', async (_key, { arg }: { arg: { id: string } }) => {
+    const existingCategory = await fetchSingle<Category>('categories', arg.id);
+    const deletedAt = nowIso();
+    await pushSyncChange({
+      categories: [
+        toSyncCategoryItem({
+          ...existingCategory,
+          is_deleted: true,
+          deleted_at: deletedAt,
+          updated_at: deletedAt,
+        }),
+      ],
+    });
+    await mutate('categories');
+    return true;
+  });
 }
 
 export function useAddGoal() {
   const { mutate } = useSWRConfig();
-  const { user } = useAuth();
-  return useSWRMutation(
-    'savings_goals',
-    async (_key, { arg }: { arg: Omit<Goal, 'id' | 'sync_status' | 'is_deleted'> }) => {
-      if (!user?.uid) throw new Error('User not authenticated');
-      const payload = { ...arg, firebase_uid: user.uid };
-      const { data, error } = await supabase
-        .from('savings_goals')
-        .insert(payload)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
-    },
-    {
-      onSuccess: () => {
-        mutate('savings_goals');
-      },
-    }
-  );
+  return useSWRMutation('savings_goals', async (_key, { arg }: { arg: Omit<Goal, 'id' | 'sync_status' | 'is_deleted'> }) => {
+    const timestamp = nowIso();
+    const goal: Goal = {
+      id: createUuid(),
+      ...arg,
+      created_at: timestamp,
+      updated_at: timestamp,
+      is_deleted: false,
+    };
+    await pushSyncChange({ goals: [toSyncGoalItem(goal, [])] });
+    await mutate('savings_goals');
+    return goal;
+  });
 }
 
 export function useEditGoal() {
   const { mutate } = useSWRConfig();
-  return useSWRMutation(
-    'savings_goals',
-    async (_key, { arg }: { arg: { id: string } & Partial<Omit<Goal, 'id'>> }) => {
-      const { id, ...updates } = arg;
-      const { data, error } = await supabase
-        .from('savings_goals')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
-    },
-    {
-      onSuccess: () => {
-        mutate('savings_goals');
-      },
-    }
-  );
+  return useSWRMutation('savings_goals', async (_key, { arg }: { arg: { id: string } & Partial<Omit<Goal, 'id'>> }) => {
+    const existingGoal = await fetchSingle<Goal>('savings_goals', arg.id);
+    const existingTransactions = await fetchGoalTransactionsByGoalId(arg.id);
+    const updatedGoal: Goal = {
+      ...existingGoal,
+      ...arg,
+      updated_at: nowIso(),
+    };
+    await pushSyncChange({ goals: [toSyncGoalItem(updatedGoal, existingTransactions)] });
+    await mutate('savings_goals');
+    return updatedGoal;
+  });
 }
 
 export function useDeleteGoal() {
   const { mutate } = useSWRConfig();
-  return useSWRMutation(
-    'savings_goals',
-    async (_key, { arg }: { arg: { id: string } }) => {
-      const { error } = await supabase
-        .from('savings_goals')
-        .update({ is_deleted: true, deleted_at: new Date().toISOString() })
-        .eq('id', arg.id);
-      if (error) throw error;
-      return true;
-    },
-    {
-      onSuccess: () => {
-        mutate('savings_goals');
-      },
-    }
-  );
+  return useSWRMutation('savings_goals', async (_key, { arg }: { arg: { id: string } }) => {
+    const existingGoal = await fetchSingle<Goal>('savings_goals', arg.id);
+    const existingTransactions = await fetchGoalTransactionsByGoalId(arg.id);
+    const deletedAt = nowIso();
+    await pushSyncChange({
+      goals: [
+        toSyncGoalItem(
+          {
+            ...existingGoal,
+            is_deleted: true,
+            deleted_at: deletedAt,
+            updated_at: deletedAt,
+          },
+          existingTransactions
+        ),
+      ],
+    });
+    await mutate('savings_goals');
+    return true;
+  });
 }
 
 export function useAddGoalTransaction() {
   const { mutate } = useSWRConfig();
-  const { user } = useAuth();
-  return useSWRMutation(
-    'goal_transactions',
-    async (_key, { arg }: { arg: Omit<GoalTransaction, 'id'> }) => {
-      if (!user?.uid) throw new Error('User not authenticated');
-      const { data, error } = await supabase.from('goal_transactions').insert(arg).select().single();
-      if (error) throw error;
-      return data;
-    },
-    {
-      onSuccess: () => {
-        mutate('savings_goals');
-      },
-    }
-  );
+  return useSWRMutation('goal_transactions', async (_key, { arg }: { arg: Omit<GoalTransaction, 'id'> }) => {
+    const existingGoal = await fetchSingle<Goal>('savings_goals', arg.goal_id);
+    const existingTransactions = await fetchGoalTransactionsByGoalId(arg.goal_id);
+    const transaction: GoalTransaction = {
+      id: createUuid(),
+      ...arg,
+    };
+    await pushSyncChange({
+      goals: [
+        toSyncGoalItem(
+          {
+            ...existingGoal,
+            updated_at: nowIso(),
+          },
+          [...existingTransactions, transaction]
+        ),
+      ],
+    });
+    await mutate('savings_goals');
+    await mutate(['goal_transactions', arg.goal_id]);
+    return transaction;
+  });
 }
 
 export function useUpdateGoalBalance() {
   const { mutate } = useSWRConfig();
-  return useSWRMutation(
-    'savings_goals',
-    async (_key, { arg }: { arg: { id: string; current_amount: number } }) => {
-      const { id, current_amount } = arg;
-      const { error } = await supabase
-        .from('savings_goals')
-        .update({ current_amount, updated_at: new Date().toISOString() })
-        .eq('id', id);
-      if (error) throw error;
-      return true;
-    },
-    {
-      onSuccess: () => {
-        mutate('savings_goals');
-      },
-    }
-  );
+  return useSWRMutation('savings_goals', async (_key, { arg }: { arg: { id: string; current_amount: number } }) => {
+    const existingGoal = await fetchSingle<Goal>('savings_goals', arg.id);
+    const existingTransactions = await fetchGoalTransactionsByGoalId(arg.id);
+    const updatedGoal: Goal = {
+      ...existingGoal,
+      current_amount: arg.current_amount,
+      updated_at: nowIso(),
+    };
+    await pushSyncChange({ goals: [toSyncGoalItem(updatedGoal, existingTransactions)] });
+    await mutate('savings_goals');
+    return true;
+  });
 }
 
 export function useGoalTransactions(goalId?: string) {
   const fetcherByGoal = async () => {
     if (!goalId) return [];
-    const { data, error } = await supabase
-      .from('goal_transactions')
-      .select('*')
-      .eq('goal_id', goalId)
-      .order('date', { ascending: false })
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: false });
-    if (error) throw error;
-    return data as GoalTransaction[];
+    return fetchGoalTransactionsByGoalId(goalId);
   };
 
-  const { data, error, isLoading, mutate } = useSWR(
-    goalId ? ['goal_transactions', goalId] : null,
-    fetcherByGoal
-  );
-
+  const { data, error, isLoading, mutate } = useSWR(goalId ? ['goal_transactions', goalId] : null, fetcherByGoal);
   return {
     transactions: data || [],
     isLoading,
@@ -573,78 +643,61 @@ export function useGoalTransactions(goalId?: string) {
 
 export function useAddExpense() {
   const { mutate } = useSWRConfig();
-  const { user } = useAuth();
-  return useSWRMutation(
-    'expenses',
-    async (_key, { arg }: { arg: Omit<Expense, 'id' | 'created_at' | 'updated_at'> }) => {
-      if (!user?.uid) throw new Error('User not authenticated');
-      const payload = { ...arg, firebase_uid: user.uid };
-      const { data, error } = await supabase
-        .from('expenses')
-        .insert(toExpenseWritePayload(payload, { includeDefaultType: true }))
-        .select()
-        .single();
-      if (error) throw error;
-      return normalizeExpense(data as ExpenseWriteInput);
-    },
-    {
-      onSuccess: () => {
-        mutate('expenses');
-      },
-    }
-  );
+  return useSWRMutation('expenses', async (_key, { arg }: { arg: Omit<Expense, 'id' | 'created_at' | 'updated_at'> }) => {
+    const timestamp = nowIso();
+    const expense: ExpenseWriteInput = {
+      ...arg,
+      id: createUuid(),
+      created_at: timestamp,
+      updated_at: timestamp,
+      is_deleted: false,
+    };
+    await pushSyncChange({ expenses: [toSyncExpenseItem(expense)] });
+    await mutate('expenses');
+    revalidateFinanceSummary(mutate);
+    return normalizeExpense(expense);
+  });
 }
 
 export function useEditExpense() {
   const { mutate } = useSWRConfig();
-  return useSWRMutation(
-    'expenses',
-    async (_key, { arg }: { arg: { id: string } & Partial<Omit<Expense, 'id' | 'created_at' | 'updated_at'>> }) => {
-      const { id, ...updates } = arg;
-      const { data, error } = await supabase
-        .from('expenses')
-        .update(toExpenseWritePayload(updates))
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
-      return normalizeExpense(data as ExpenseWriteInput);
-    },
-    {
-      onSuccess: () => {
-        mutate('expenses');
-      },
-    }
-  );
+  return useSWRMutation('expenses', async (_key, { arg }: { arg: { id: string } & Partial<Omit<Expense, 'id' | 'created_at' | 'updated_at'>> }) => {
+    const existingExpense = await fetchSingle<Expense>('expenses', arg.id);
+    const updatedExpense: ExpenseWriteInput = {
+      ...existingExpense,
+      ...arg,
+      updated_at: nowIso(),
+    };
+    await pushSyncChange({ expenses: [toSyncExpenseItem(updatedExpense)] });
+    await mutate('expenses');
+    revalidateFinanceSummary(mutate);
+    return normalizeExpense(updatedExpense);
+  });
 }
 
 export function useDeleteExpense() {
   const { mutate } = useSWRConfig();
-  return useSWRMutation(
-    'expenses',
-    async (_key, { arg }: { arg: { id: string } }) => {
-      const { error } = await supabase
-        .from('expenses')
-        .update({ is_deleted: true, deleted_at: new Date().toISOString() })
-        .eq('id', arg.id);
-      if (error) throw error;
-      return true;
-    },
-    {
-      onSuccess: () => {
-        mutate('expenses');
-      },
-    }
-  );
+  return useSWRMutation('expenses', async (_key, { arg }: { arg: { id: string } }) => {
+    const existingExpense = await fetchSingle<Expense>('expenses', arg.id);
+    const deletedAt = nowIso();
+    await pushSyncChange({
+      expenses: [
+        toSyncExpenseItem({
+          ...existingExpense,
+          is_deleted: true,
+          deleted_at: deletedAt,
+          updated_at: deletedAt,
+        }),
+      ],
+    });
+    await mutate('expenses');
+    revalidateFinanceSummary(mutate);
+    return true;
+  });
 }
 
-// Recurring Expenses Hooks
 export function useRecurringExpenses() {
-  const { data, error, isLoading, mutate } = useSWR<RecurringExpense[]>(
-    'recurring_expenses',
-    fetcher
-  );
-
+  const { data, error, isLoading, mutate } = useSWR<RecurringExpense[]>('recurring_expenses', fetcher);
   return {
     recurringExpenses: data || [],
     isLoading,
@@ -655,83 +708,67 @@ export function useRecurringExpenses() {
 
 export function useAddRecurringExpense() {
   const { mutate } = useSWRConfig();
-  const { user } = useAuth();
-  return useSWRMutation(
-    'recurring_expenses',
-    async (_key, { arg }: { arg: Omit<RecurringExpense, 'id' | 'created_at' | 'updated_at' | 'sync_status' | 'synced_at' | 'is_deleted'> }) => {
-      if (!user?.uid) throw new Error('User not authenticated');
-      const payload = { ...arg, firebase_uid: user.uid };
-      const { data, error } = await supabase.from('recurring_expenses').insert(payload).select().single();
-      if (error) throw error;
-      return data;
-    },
-    {
-      onSuccess: () => {
-        mutate('recurring_expenses');
-      },
-    }
-  );
+  return useSWRMutation('recurring_expenses', async (_key, { arg }: { arg: Omit<RecurringExpense, 'id' | 'created_at' | 'updated_at' | 'sync_status' | 'synced_at' | 'is_deleted'> }) => {
+    const timestamp = nowIso();
+    const recurringExpense: RecurringExpense = {
+      id: createUuid(),
+      ...arg,
+      created_at: timestamp,
+      updated_at: timestamp,
+      is_deleted: false,
+    };
+    await pushSyncChange({ recurring: [toSyncRecurringItem(recurringExpense)] });
+    await mutate('recurring_expenses');
+    return recurringExpense;
+  });
 }
 
 export function useEditRecurringExpense() {
   const { mutate } = useSWRConfig();
-  return useSWRMutation(
-    'recurring_expenses',
-    async (_key, { arg }: { arg: { id: string } & Partial<Omit<RecurringExpense, 'id' | 'created_at' | 'updated_at'>> }) => {
-      const { id, ...updates } = arg;
-      const { data, error } = await supabase
-        .from('recurring_expenses')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
-    },
-    {
-      onSuccess: () => {
-        mutate('recurring_expenses');
-      },
-    }
-  );
+  return useSWRMutation('recurring_expenses', async (_key, { arg }: { arg: { id: string } & Partial<Omit<RecurringExpense, 'id' | 'created_at' | 'updated_at'>> }) => {
+    const existingRecurringExpense = await fetchSingle<RecurringExpense>('recurring_expenses', arg.id);
+    const updatedRecurringExpense: RecurringExpense = {
+      ...existingRecurringExpense,
+      ...arg,
+      updated_at: nowIso(),
+    };
+    await pushSyncChange({ recurring: [toSyncRecurringItem(updatedRecurringExpense)] });
+    await mutate('recurring_expenses');
+    return updatedRecurringExpense;
+  });
 }
 
 export function useDeleteRecurringExpense() {
   const { mutate } = useSWRConfig();
-  return useSWRMutation(
-    'recurring_expenses',
-    async (_key, { arg }: { arg: { id: string } }) => {
-      const { error } = await supabase
-        .from('recurring_expenses')
-        .update({ is_deleted: true, deleted_at: new Date().toISOString() })
-        .eq('id', arg.id);
-      if (error) throw error;
-      return true;
-    },
-    {
-      onSuccess: () => {
-        mutate('recurring_expenses');
-      },
-    }
-  );
+  return useSWRMutation('recurring_expenses', async (_key, { arg }: { arg: { id: string } }) => {
+    const existingRecurringExpense = await fetchSingle<RecurringExpense>('recurring_expenses', arg.id);
+    const deletedAt = nowIso();
+    await pushSyncChange({
+      recurring: [
+        toSyncRecurringItem({
+          ...existingRecurringExpense,
+          is_deleted: true,
+          deleted_at: deletedAt,
+          updated_at: deletedAt,
+        }),
+      ],
+    });
+    await mutate('recurring_expenses');
+    return true;
+  });
 }
 
 export function useToggleRecurringExpense() {
   const { mutate } = useSWRConfig();
-  return useSWRMutation(
-    'recurring_expenses',
-    async (_key, { arg }: { arg: { id: string; isActive: boolean } }) => {
-      const { error } = await supabase
-        .from('recurring_expenses')
-        .update({ is_active: arg.isActive, updated_at: new Date().toISOString() })
-        .eq('id', arg.id);
-      if (error) throw error;
-      return true;
-    },
-    {
-      onSuccess: () => {
-        mutate('recurring_expenses');
-      },
-    }
-  );
+  return useSWRMutation('recurring_expenses', async (_key, { arg }: { arg: { id: string; isActive: boolean } }) => {
+    const existingRecurringExpense = await fetchSingle<RecurringExpense>('recurring_expenses', arg.id);
+    const updatedRecurringExpense: RecurringExpense = {
+      ...existingRecurringExpense,
+      is_active: arg.isActive,
+      updated_at: nowIso(),
+    };
+    await pushSyncChange({ recurring: [toSyncRecurringItem(updatedRecurringExpense)] });
+    await mutate('recurring_expenses');
+    return true;
+  });
 }

@@ -19,21 +19,28 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { getCategoryType, getTransactionType } from '@/lib/transactions';
 import { cn } from '@/lib/utils';
 
-const expenseSchema = yup
+type ExpenseFormData = {
+  transaction_type: TransactionType;
+  amount: number;
+  currency: string;
+  date: string;
+  note: string;
+  category_id: string;
+};
+
+const expenseSchema: yup.ObjectSchema<ExpenseFormData> = yup
   .object({
     transaction_type: yup
       .mixed<TransactionType>()
       .oneOf(['expense', 'income'])
       .required('Transaction type is required'),
     amount: yup.number().typeError('Amount must be a number').positive('Amount must be positive').required('Amount is required'),
-    currency: yup.string().default('USD'),
+    currency: yup.string().default('USD').required(),
     date: yup.string().required('Date is required'),
-    note: yup.string().optional(),
+    note: yup.string().defined().default(''),
     category_id: yup.string().required('Category is required'),
   })
   .required();
-
-type ExpenseFormData = yup.InferType<typeof expenseSchema>;
 type AddExpenseStep = 'ai' | 'form';
 
 interface AddExpenseModalProps {

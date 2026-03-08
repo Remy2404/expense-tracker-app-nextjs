@@ -10,6 +10,14 @@ import {
   AiScenarioRequest,
 } from '@/types/ai';
 
+const AI_NUDGES_SWR_OPTIONS = {
+  revalidateOnFocus: false,
+  revalidateOnReconnect: false,
+  shouldRetryOnError: false,
+  errorRetryCount: 0,
+  dedupingInterval: 60_000,
+} as const;
+
 // GET Hooks
 export function useAiInsights(type: AiInsightType) {
   return useSWR(`/api/ai/insights/${type}`, () => aiApi.getInsights(type));
@@ -20,7 +28,7 @@ export function useAiForecast() {
 }
 
 export function useAiNudges() {
-  return useSWR('/api/ai/nudges', () => aiApi.fetchNudges());
+  return useSWR('/api/ai/nudges', () => aiApi.fetchNudges(), AI_NUDGES_SWR_OPTIONS);
 }
 
 // POST Mutation Hooks

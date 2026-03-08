@@ -70,6 +70,7 @@ export interface AiChatRequest {
   image_present?: boolean;
   attachment_base64?: string;
   attachment_mime?: 'image/jpeg' | 'image/png' | 'image/webp';
+  requestId?: string;
 }
 
 export interface AiChatHistoryItem {
@@ -126,6 +127,23 @@ export interface AiChatMessage {
   createdAt: number;
   explainability?: AiChatExplainability | null;
   field_confidences?: Record<string, number> | null;
+}
+
+export interface AiChatPersistedMessage {
+  id: string;
+  role: AiChatRole;
+  content: string;
+  created_at: string;
+}
+
+export interface AiChatHistoryResponse {
+  messages: AiChatPersistedMessage[];
+}
+
+export interface RealtimeSessionResponse {
+  token: string;
+  socket_url: string;
+  expires_at_epoch_seconds: number;
 }
 
 export interface AiInsightHighlight {
