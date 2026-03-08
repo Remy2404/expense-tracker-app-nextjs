@@ -9,6 +9,7 @@ import { NotificationsBell } from '@/components/NotificationsBell';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import {
   Sheet,
   SheetContent,
@@ -53,7 +54,18 @@ export function AppShell({ children }: AppShellProps) {
         </ScrollArea>
         <Separator />
         <div className="p-4 space-y-3">
-          <p className="px-2 text-xs text-muted-foreground truncate">{displayName}</p>
+          <div className="flex items-center gap-3 px-2">
+            <UserAvatar
+              photoURL={user?.photoURL}
+              displayName={user?.displayName}
+              email={user?.email}
+              className="h-10 w-10"
+            />
+            <div className="min-w-0">
+              <p className="text-sm font-medium truncate">{displayName}</p>
+              <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+            </div>
+          </div>
           <Button variant="outline" className="w-full justify-start" onClick={handleSignOut}>
             <LogOut className="mr-2 h-4 w-4" />
             Sign Out
@@ -109,9 +121,13 @@ export function AppShell({ children }: AppShellProps) {
 
           <div className="flex items-center gap-2">
             <NotificationsBell />
-            <div className="h-8 w-8 rounded-full bg-primary/10 text-primary grid place-items-center text-xs font-semibold">
-              {user?.email?.charAt(0).toUpperCase() || '?'}
-            </div>
+            <UserAvatar
+              photoURL={user?.photoURL}
+              displayName={user?.displayName}
+              email={user?.email}
+              className="h-8 w-8"
+              fallbackClassName="text-xs font-semibold"
+            />
           </div>
         </header>
 

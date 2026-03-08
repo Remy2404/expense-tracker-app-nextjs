@@ -42,16 +42,25 @@ const syncProfileToSupabase = async (firebaseUser: User | null) => {
   // Check if profile exists
   const { data: existingProfile } = await supabase
     .from('profiles')
-    .select('id, email')
+    .select('id, email, display_name, photo_url')
     .eq('firebase_uid', uid)
     .single();
 
   if (existingProfile) {
-    // Update existing profile with fresh email (in case it changed)
-    if (email && existingProfile.email !== email) {
+    const nextProfile = {
+      email: email || null,
+      display_name: displayName || null,
+      photo_url: photoURL || null,
+    };
+    const needsUpdate =
+      existingProfile.email !== nextProfile.email ||
+      existingProfile.display_name !== nextProfile.display_name ||
+      existingProfile.photo_url !== nextProfile.photo_url;
+
+    if (needsUpdate) {
       await supabase
         .from('profiles')
-        .update({ email, display_name: displayName || null, photo_url: photoURL || null })
+        .update(nextProfile)
         .eq('firebase_uid', uid);
     }
   } else {

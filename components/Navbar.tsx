@@ -7,6 +7,7 @@ import { Wallet, LogOut, LayoutDashboard, ChevronDown, Moon, Sun } from 'lucide-
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from 'next-themes';
 import { useEffect } from 'react';
+import { UserAvatar } from '@/components/ui/user-avatar';
 
 export default function Navbar() {
   const { user, loading, signOutUser } = useAuth();
@@ -56,11 +57,13 @@ export default function Navbar() {
                 onClick={() => setIsProfileOpen(!isProfileOpen)}
                 className="flex items-center gap-2 hover:opacity-80 transition-opacity"
               >
-                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                  <span className="text-sm font-medium text-primary">
-                    {user.email?.charAt(0).toUpperCase() || '?'}
-                  </span>
-                </div>
+                <UserAvatar
+                  photoURL={user.photoURL}
+                  displayName={user.displayName}
+                  email={user.email}
+                  className="h-8 w-8"
+                  fallbackClassName="text-sm"
+                />
                 <ChevronDown size={16} className="text-foreground/60" />
               </button>
               {isProfileOpen && (
@@ -71,8 +74,18 @@ export default function Navbar() {
                   />
                   <div className="absolute right-0 mt-2 w-48 bg-card border border-border rounded-lg shadow-lg z-50 overflow-hidden">
                     <div className="px-4 py-3 border-b border-border">
-                      <p className="text-sm font-medium truncate">{user.displayName || user.email}</p>
-                      <p className="text-xs text-foreground/50 truncate">{user.email}</p>
+                      <div className="mb-3 flex items-center gap-3">
+                        <UserAvatar
+                          photoURL={user.photoURL}
+                          displayName={user.displayName}
+                          email={user.email}
+                          className="h-10 w-10"
+                        />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{user.displayName || user.email}</p>
+                          <p className="text-xs text-foreground/50 truncate">{user.email}</p>
+                        </div>
+                      </div>
                     </div>
                     <Link
                       href="/dashboard"

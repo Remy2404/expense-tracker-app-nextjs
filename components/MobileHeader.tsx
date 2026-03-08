@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { Wallet, LogOut } from 'lucide-react';
 import { NotificationsBell } from '@/components/NotificationsBell';
 import { useAuth } from '@/contexts/AuthContext';
+import { UserAvatar } from '@/components/ui/user-avatar';
 
 export default function MobileHeader() {
   const router = useRouter();
@@ -23,11 +24,13 @@ export default function MobileHeader() {
         <span className="font-bold text-lg tracking-tight">ExpenseVault</span>
       </div>
       <div className="flex items-center gap-2">
-        <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center">
-          <span className="text-xs font-medium text-primary">
-            {user?.email?.charAt(0).toUpperCase() || '?'}
-          </span>
-        </div>
+        <UserAvatar
+          photoURL={user?.photoURL}
+          displayName={user?.displayName}
+          email={user?.email}
+          className="h-7 w-7"
+          fallbackClassName="text-xs"
+        />
         <NotificationsBell />
         <button
           onClick={handleSignOut}
