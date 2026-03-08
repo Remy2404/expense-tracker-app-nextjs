@@ -33,16 +33,16 @@ export default function MarketingScreenshots() {
   };
 
   return (
-    <section className="py-24 bg-gradient-to-b from-slate-50 via-white to-slate-100 text-slate-900 overflow-hidden relative">
+    <section className="py-24 bg-gradient-to-b from-background via-background to-muted text-foreground overflow-hidden relative">
       {/* Background glow effects - Light mode */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-[500px] bg-emerald-400/10 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute bottom-0 right-1/4 w-full max-w-2xl h-[400px] bg-blue-400/10 rounded-full blur-[100px] pointer-events-none" />
 
       <div className="container mx-auto px-6 relative z-10 text-center mb-16">
-        <h2 className="text-4xl md:text-5xl font-extrabold mb-6 tracking-tight text-slate-900">
+        <h2 className="text-4xl md:text-5xl font-extrabold mb-6 tracking-tight text-foreground">
           Experience the <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-400">Future of Finance</span>
         </h2>
-        <p className="text-lg md:text-xl text-slate-600 max-w-2xl mx-auto font-medium">
+        <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto font-medium">
           A premium, intelligent companion for your wealth. Discover our beautiful features designed for the modern era.
         </p>
       </div>
@@ -51,7 +51,7 @@ export default function MarketingScreenshots() {
         {/* Navigation Buttons */}
         <button 
           onClick={scrollLeft}
-          className="absolute left-2 md:left-8 top-1/2 -translate-y-1/2 z-30 bg-white/90 hover:bg-emerald-50 border border-slate-200 text-slate-700 hover:text-emerald-600 rounded-full p-3 md:p-4 backdrop-blur-md transition-all opacity-0 md:opacity-100 lg:opacity-0 lg:group-hover/carousel:opacity-100 shadow-[0_8px_30px_rgb(0,0,0,0.12)]"
+          className="absolute left-2 md:left-8 top-1/2 -translate-y-1/2 z-30 bg-background/90 hover:bg-muted border border-border text-foreground hover:text-emerald-600 rounded-full p-3 md:p-4 backdrop-blur-md transition-all opacity-0 md:opacity-100 lg:opacity-0 lg:group-hover/carousel:opacity-100 shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.5)]"
           aria-label="Scroll left"
         >
           <ChevronLeft className="w-6 h-6" />
@@ -59,7 +59,7 @@ export default function MarketingScreenshots() {
         
         <button 
           onClick={scrollRight}
-          className="absolute right-2 md:right-8 top-1/2 -translate-y-1/2 z-30 bg-white/90 hover:bg-emerald-50 border border-slate-200 text-slate-700 hover:text-emerald-600 rounded-full p-3 md:p-4 backdrop-blur-md transition-all opacity-0 md:opacity-100 lg:opacity-0 lg:group-hover/carousel:opacity-100 shadow-[0_8px_30px_rgb(0,0,0,0.12)]"
+          className="absolute right-2 md:right-8 top-1/2 -translate-y-1/2 z-30 bg-background/90 hover:bg-muted border border-border text-foreground hover:text-emerald-600 rounded-full p-3 md:p-4 backdrop-blur-md transition-all opacity-0 md:opacity-100 lg:opacity-0 lg:group-hover/carousel:opacity-100 shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.5)]"
           aria-label="Scroll right"
         >
           <ChevronRight className="w-6 h-6" />
@@ -77,7 +77,7 @@ export default function MarketingScreenshots() {
               className="relative flex-shrink-0 snap-center group transition-all duration-500 hover:-translate-y-4"
             >
               {/* CSS Phone Mockup Wrapper */}
-              <div className="relative mx-auto border-gray-900 dark:border-gray-900 bg-gray-900 border-[8px] rounded-[2.5rem] h-[650px] w-[300px] shadow-[0_20px_50px_rgba(0,0,0,0.15)] ring-1 ring-black/5 overflow-hidden group-hover:shadow-[0_30px_60px_rgba(16,185,129,0.2)] transition-shadow duration-500">
+              <div className="relative mx-auto border-gray-900 bg-gray-900 border-[8px] rounded-[2.5rem] h-[650px] w-[300px] shadow-[0_20px_50px_rgba(0,0,0,0.15)] ring-1 ring-black/5 dark:shadow-[0_20px_50px_rgba(0,0,0,0.5)] dark:ring-white/10 overflow-hidden group-hover:shadow-[0_30px_60px_rgba(16,185,129,0.2)] dark:group-hover:shadow-[0_30px_60px_rgba(16,185,129,0.5)] transition-shadow duration-500">
                 
                 {/* iPhone Notch */}
                 <div className="absolute top-0 inset-x-0 h-6 bg-gray-900 rounded-b-3xl w-40 mx-auto z-20 flex justify-center items-center">

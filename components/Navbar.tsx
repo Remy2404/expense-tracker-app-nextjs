@@ -3,13 +3,21 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Wallet, LogOut, LayoutDashboard, ChevronDown } from 'lucide-react';
+import { Wallet, LogOut, LayoutDashboard, ChevronDown, Moon, Sun } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from 'next-themes';
+import { useEffect } from 'react';
 
 export default function Navbar() {
   const { user, loading, signOutUser } = useAuth();
   const router = useRouter();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleSignOut = async () => {
     const result = await signOutUser();
@@ -31,6 +39,15 @@ export default function Navbar() {
           <Link href="#about" className="hover:text-foreground transition-colors">About</Link>
         </div>
         <div className="flex items-center gap-4">
+          {mounted && (
+            <button
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              className="p-2 rounded-full hover:bg-foreground/5 transition-colors text-foreground"
+              aria-label="Toggle theme"
+            >
+              {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
+          )}
           {loading ? (
             <div className="h-8 w-8 rounded-full bg-foreground/10 animate-pulse"></div>
           ) : user ? (
