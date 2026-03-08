@@ -28,7 +28,7 @@ export function UserAvatar({
   const shouldShowImage = !!photoURL && !imageFailed;
 
   return (
-    <div className={cn('relative overflow-hidden rounded-full bg-primary/10', className)}>
+    <div className={cn('relative flex shrink-0 overflow-hidden rounded-full bg-primary/10', className)}>
       {shouldShowImage ? (
         <img
           src={photoURL}
