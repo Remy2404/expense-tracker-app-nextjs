@@ -15,10 +15,13 @@ type RealtimeEventName = keyof RealtimeEventMap;
 type RealtimeHandler<T extends RealtimeEventName> = (payload: RealtimeEventMap[T]) => void;
 
 class WebRealtimeClient {
+  private static readonly CONNECT_TIMEOUT_MS = 10_000;
+  private static readonly RETRY_COOLDOWN_MS = 30_000;
   private socket: Socket | null = null;
   private activeUid: string | null = null;
   private listeners = new Map<RealtimeEventName, Set<(payload: unknown) => void>>();
   private connectPromise: Promise<void> | null = null;
+  private disabledUntil = 0;
 
   async connect(): Promise<void> {
     const uid = auth.currentUser?.uid;
@@ -27,7 +30,7 @@ class WebRealtimeClient {
       return;
     }
 
-    if (this.socket && this.activeUid === uid) {
+    if (this.socket && this.activeUid === uid && this.socket.connected) {
       return;
     }
 
@@ -35,9 +38,14 @@ class WebRealtimeClient {
       return this.connectPromise;
     }
 
+    if (this.disabledUntil > Date.now()) {
+      return;
+    }
+
     this.connectPromise = (async () => {
       const session = await aiApi.getRealtimeSession();
       if (!session.socket_url) {
+        this.disabledUntil = Date.now() + WebRealtimeClient.RETRY_COOLDOWN_MS;
         return;
       }
 
@@ -47,17 +55,24 @@ class WebRealtimeClient {
         auth: {
           token: session.token,
         },
-        autoConnect: true,
+        autoConnect: false,
         reconnection: true,
       });
 
       this.socket = socket;
       this.activeUid = uid;
       this.bindSocket(socket);
+      socket.connect();
+      await this.awaitSocketConnection(socket);
+      this.disabledUntil = 0;
     })();
 
     try {
       await this.connectPromise;
+    } catch (error) {
+      this.disabledUntil = Date.now() + WebRealtimeClient.RETRY_COOLDOWN_MS;
+      this.disconnect();
+      throw error;
     } finally {
       this.connectPromise = null;
     }
@@ -107,8 +122,51 @@ class WebRealtimeClient {
 
     socket.on('disconnect', (reason) => {
       if (reason === 'io server disconnect') {
-        void this.connect();
+        void this.connect().catch((error) => {
+          console.warn('Realtime reconnect failed in web client.', error);
+        });
       }
+    });
+  }
+
+  private awaitSocketConnection(socket: Socket): Promise<void> {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const timeoutId = window.setTimeout(() => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        cleanup();
+        reject(new Error('Realtime connection timed out.'));
+      }, WebRealtimeClient.CONNECT_TIMEOUT_MS);
+
+      const handleConnect = () => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        cleanup();
+        resolve();
+      };
+
+      const handleConnectError = (error: Error) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        cleanup();
+        reject(error);
+      };
+
+      const cleanup = () => {
+        window.clearTimeout(timeoutId);
+        socket.off('connect', handleConnect);
+        socket.off('connect_error', handleConnectError);
+      };
+
+      socket.on('connect', handleConnect);
+      socket.on('connect_error', handleConnectError);
     });
   }
 }
