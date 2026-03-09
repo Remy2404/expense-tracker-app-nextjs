@@ -6,7 +6,6 @@ import { Category, CategoryType } from '@/types';
 import { CategoryModal } from '@/components/CategoryModal';
 import { useAddCategory, useCategories, useDeleteCategory, useEditCategory } from '@/hooks/useData';
 import { MOBILE_DEFAULT_CATEGORIES } from '@/constants/defaultCategories';
-import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { getCategoryIconComponent } from '@/lib/categoryAppearance';
 import { ErrorState } from '@/components/state/ErrorState';
@@ -76,24 +75,6 @@ export default function CategoriesPage() {
 
     setIsResetting(true);
     try {
-      // First ensure profile exists (required for foreign key)
-      const { data: existingProfile } = await supabase
-        .from('profiles')
-        .select('firebase_uid')
-        .eq('firebase_uid', user.uid)
-        .single();
-
-      if (!existingProfile) {
-        // Create profile if it doesn't exist
-        const { error: profileError } = await supabase.from('profiles').insert({
-          firebase_uid: user.uid,
-        });
-        if (profileError) {
-          alert('Failed to create user profile. Please try again.');
-          return;
-        }
-      }
-
       // Get existing category names
       const existingNames = new Set(categories.map((cat) => cat.name.trim().toLowerCase()));
 
@@ -109,13 +90,15 @@ export default function CategoriesPage() {
 
       // Insert missing defaults one by one
       for (const category of missingDefaults) {
-        const { type, ...rest } = category;
-        const { error } = await supabase.from('categories').insert({
-          ...rest,
-          category_type: type,
-          firebase_uid: user.uid,
-        });
-        if (error) {
+        try {
+          await addCategory({
+            name: category.name,
+            icon: category.icon,
+            color: category.color,
+            type: category.type as CategoryType,
+            is_default: true,
+          });
+        } catch (error) {
           console.warn('Failed to add category:', category.name, error);
         }
       }

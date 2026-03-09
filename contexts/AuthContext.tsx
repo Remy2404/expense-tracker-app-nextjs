@@ -1,22 +1,29 @@
 'use client';
 
-import { createContext, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { FirebaseError } from 'firebase/app';
 import {
+  createUserWithEmailAndPassword,
   GoogleAuthProvider,
-  User,
   linkWithPopup,
   onAuthStateChanged,
+  onIdTokenChanged,
+  signInWithCustomToken,
+  signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
+  User,
 } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
-import { supabase } from '@/lib/supabase';
+import { auth, authPersistenceReady } from '@/lib/firebase';
+import { authApi } from '@/lib/api/auth.api';
+import { normalizeAiApiError } from '@/lib/api/http';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   isLoading: boolean;
+  signInWithEmail: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  signUpWithEmail: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signInWithGoogle: () => Promise<{ success: boolean; error?: string }>;
   signOutUser: () => Promise<{ success: boolean; error?: string }>;
   linkGoogleProvider: () => Promise<{ success: boolean; error?: string }>;
@@ -27,67 +34,28 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   isLoading: true,
+  signInWithEmail: async () => ({ success: false, error: 'Auth context not ready.' }),
+  signUpWithEmail: async () => ({ success: false, error: 'Auth context not ready.' }),
   signInWithGoogle: async () => ({ success: false, error: 'Auth context not ready.' }),
   signOutUser: async () => ({ success: false, error: 'Auth context not ready.' }),
   linkGoogleProvider: async () => ({ success: false, error: 'Auth context not ready.' }),
   isGoogleLinked: false,
 });
 
-// Helper to create/update profile in Supabase with user info
-const syncProfileToSupabase = async (firebaseUser: User | null) => {
-  if (!firebaseUser) return;
-
-  const { uid, email, displayName, photoURL } = firebaseUser;
-
-  // Check if profile exists
-  const { data: existingProfile } = await supabase
-    .from('profiles')
-    .select('id, email, display_name, photo_url')
-    .eq('firebase_uid', uid)
-    .single();
-
-  if (existingProfile) {
-    const nextProfile = {
-      email: email || null,
-      display_name: displayName || null,
-      photo_url: photoURL || null,
-    };
-    const needsUpdate =
-      existingProfile.email !== nextProfile.email ||
-      existingProfile.display_name !== nextProfile.display_name ||
-      existingProfile.photo_url !== nextProfile.photo_url;
-
-    if (needsUpdate) {
-      await supabase
-        .from('profiles')
-        .update(nextProfile)
-        .eq('firebase_uid', uid);
-    }
-  } else {
-    // Create new profile
-    await supabase
-      .from('profiles')
-      .insert({
-        firebase_uid: uid,
-        email: email || null,
-        display_name: displayName || null,
-        photo_url: photoURL || null,
-      });
-  }
-};
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const bootstrapAttemptedRef = useRef(false);
   const provider = useMemo(() => {
     const googleAuthProvider = new GoogleAuthProvider();
     googleAuthProvider.setCustomParameters({ prompt: 'select_account' });
     return googleAuthProvider;
   }, []);
 
-  const mapAuthError = (error: unknown, fallback: string): string => {
+  const mapAuthError = useCallback((error: unknown, fallback: string): string => {
     if (!(error instanceof FirebaseError)) {
-      return error instanceof Error ? error.message : fallback;
+      const apiError = normalizeAiApiError(error);
+      return apiError.message || fallback;
     }
 
     switch (error.code) {
@@ -102,30 +70,135 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       case 'auth/requires-recent-login':
         return 'Please sign in again, then try linking Google.';
       case 'auth/operation-not-allowed':
-        return 'Google sign-in is not enabled in Firebase Authentication.';
+        return 'This sign-in method is not enabled in Firebase Authentication.';
+      case 'auth/invalid-credential':
+      case 'auth/wrong-password':
+      case 'auth/user-not-found':
+        return 'Invalid email or password. Please try again.';
+      case 'auth/user-disabled':
+        return 'This account has been disabled. Please contact support.';
+      case 'auth/too-many-requests':
+        return 'Too many failed attempts. Please try again later or reset your password.';
+      case 'auth/email-already-in-use':
+        return 'This email is already registered. Please sign in instead.';
+      case 'auth/invalid-email':
+        return 'Invalid email address. Please check and try again.';
+      case 'auth/weak-password':
+        return 'Password is too weak. Please use a stronger password.';
       default:
         return fallback;
     }
-  };
+  }, []);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setUser(firebaseUser);
+  const syncBackendSession = useCallback(async (firebaseUser: User, forceRefresh = false) => {
+    const idToken = await firebaseUser.getIdToken(forceRefresh);
+    await authApi.createSession(idToken);
+  }, []);
 
-      // Sync profile to Supabase when user changes
-      if (firebaseUser) {
-        await syncProfileToSupabase(firebaseUser);
+  const bootstrapFromSessionCookie = useCallback(async (): Promise<boolean> => {
+    try {
+      const session = await authApi.getSession();
+      if (!session.firebaseCustomToken) {
+        return false;
       }
 
-      setLoading(false);
+      await authPersistenceReady;
+      await signInWithCustomToken(auth, session.firebaseCustomToken);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (cancelled) {
+        return;
+      }
+
+      setUser(firebaseUser);
+
+      if (firebaseUser) {
+        setLoading(false);
+        return;
+      }
+
+      if (bootstrapAttemptedRef.current) {
+        setLoading(false);
+        return;
+      }
+
+      bootstrapAttemptedRef.current = true;
+      const restored = await bootstrapFromSessionCookie();
+      if (!restored && !cancelled) {
+        setUser(null);
+        setLoading(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [bootstrapFromSessionCookie]);
+
+  useEffect(() => {
+    const unsubscribe = onIdTokenChanged(auth, async (firebaseUser) => {
+      if (!firebaseUser) {
+        return;
+      }
+
+      try {
+        await syncBackendSession(firebaseUser);
+      } catch (error) {
+        console.error('Failed to refresh backend auth cookie.', error);
+      }
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [syncBackendSession]);
+
+  const signInWithEmail = async (
+    email: string,
+    password: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      await authPersistenceReady;
+      const credential = await signInWithEmailAndPassword(auth, email, password);
+      await syncBackendSession(credential.user, true);
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: mapAuthError(error, 'Failed to sign in. Please check your credentials.'),
+      };
+    }
+  };
+
+  const signUpWithEmail = async (
+    email: string,
+    password: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      await authPersistenceReady;
+      const credential = await createUserWithEmailAndPassword(auth, email, password);
+      await syncBackendSession(credential.user, true);
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: mapAuthError(error, 'Failed to create an account.'),
+      };
+    }
+  };
 
   const signInWithGoogle = async (): Promise<{ success: boolean; error?: string }> => {
     try {
-      await signInWithPopup(auth, provider);
+      await authPersistenceReady;
+      const credential = await signInWithPopup(auth, provider);
+      await syncBackendSession(credential.user, true);
       return { success: true };
     } catch (error) {
       return {
@@ -137,6 +210,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOutUser = async (): Promise<{ success: boolean; error?: string }> => {
     try {
+      await authApi.logout();
       await signOut(auth);
       return { success: true };
     } catch (error) {
@@ -154,6 +228,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       await linkWithPopup(auth.currentUser, provider);
+      await syncBackendSession(auth.currentUser, true);
       return { success: true };
     } catch (error) {
       return {
@@ -172,6 +247,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         loading,
         isLoading: loading,
+        signInWithEmail,
+        signUpWithEmail,
         signInWithGoogle,
         signOutUser,
         linkGoogleProvider,

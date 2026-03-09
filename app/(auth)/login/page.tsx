@@ -3,10 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { FirebaseError } from 'firebase/app';
-import { signInWithEmailAndPassword } from 'firebase/auth';
 import { Wallet, Loader2 } from 'lucide-react';
-import { auth } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function LoginPage() {
@@ -14,7 +11,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signInWithGoogle } = useAuth();
+  const { signInWithEmail, signInWithGoogle } = useAuth();
   const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -29,38 +26,12 @@ export default function LoginPage() {
     }
 
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-
-      // Check if email is available
-      if (!user.email) {
-        setError('Login succeeded but email is not available. Please contact support.');
+      const result = await signInWithEmail(email.trim(), password);
+      if (!result.success) {
+        setError(result.error || 'Failed to sign in. Please check your credentials.');
         return;
       }
-
       router.push('/dashboard');
-    } catch (err: unknown) {
-      // Provide more helpful error messages
-      if (!(err instanceof FirebaseError)) {
-        setError(err instanceof Error ? err.message : 'Failed to sign in. Please check your credentials.');
-        return;
-      }
-
-      if (
-        err.code === 'auth/invalid-credential' ||
-        err.code === 'auth/wrong-password' ||
-        err.code === 'auth/user-not-found'
-      ) {
-        setError('Invalid email or password. Please try again.');
-      } else if (err.code === 'auth/user-disabled') {
-        setError('This account has been disabled. Please contact support.');
-      } else if (err.code === 'auth/too-many-requests') {
-        setError('Too many failed attempts. Please try again later or reset your password.');
-      } else if (err.code === 'auth/operation-not-allowed') {
-        setError('Email/Password sign-in is not enabled. Please enable it in Firebase Console > Authentication.');
-      } else {
-        setError(err.message || 'Failed to sign in. Please check your credentials.');
-      }
     } finally {
       setLoading(false);
     }

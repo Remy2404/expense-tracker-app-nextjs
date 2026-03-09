@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DashboardPage from '@/app/(app)/dashboard/page';
 import { useExpenses, useBudgets, useCategories, useFinanceSummary } from '@/hooks/useData';
@@ -119,5 +119,33 @@ describe('DashboardPage', () => {
     await user.click(screen.getByRole('button', { name: /add a new transaction/i }));
 
     expect(screen.getByTestId('add-expense-modal')).toBeInTheDocument();
+  });
+
+  it('uses category fallback for recent transaction titles when notes are empty', () => {
+    mockUseExpenses.mockReturnValue({
+      expenses: [
+        {
+          id: 'exp-1',
+          amount: 12.5,
+          date: '2026-03-09T12:00:00.000Z',
+          notes: '',
+          merchant: '',
+          category_id: 'cat-business',
+          currency: 'USD',
+        },
+      ],
+      isLoading: false,
+    });
+    mockUseCategories.mockReturnValue({
+      categories: [{ id: 'cat-business', name: 'Business', icon: 'briefcase', color: '#fff' }],
+      isLoading: false,
+    });
+
+    render(<DashboardPage />);
+
+    const recentTransactionsList = screen.getByLabelText('Recent transactions list');
+
+    expect(within(recentTransactionsList).getAllByText('Business')).toHaveLength(2);
+    expect(within(recentTransactionsList).queryByText(/^Transaction$/)).not.toBeInTheDocument();
   });
 });

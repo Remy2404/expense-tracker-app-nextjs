@@ -3,10 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { FirebaseError } from 'firebase/app';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { Wallet, Loader2 } from 'lucide-react';
-import { auth } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function SignupPage() {
@@ -15,7 +12,7 @@ export default function SignupPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signInWithGoogle } = useAuth();
+  const { signInWithGoogle, signUpWithEmail } = useAuth();
   const router = useRouter();
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -37,34 +34,12 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-
-      // Check if email is available
-      if (!user.email) {
-        setError('Account created but email is not available. Please contact support.');
+      const result = await signUpWithEmail(email.trim(), password);
+      if (!result.success) {
+        setError(result.error || 'Failed to create an account.');
         return;
       }
-
       router.push('/dashboard');
-    } catch (err: unknown) {
-      // Provide more helpful error messages
-      if (!(err instanceof FirebaseError)) {
-        setError(err instanceof Error ? err.message : 'Failed to create an account.');
-        return;
-      }
-
-      if (err.code === 'auth/email-already-in-use') {
-        setError('This email is already registered. Please sign in instead.');
-      } else if (err.code === 'auth/invalid-email') {
-        setError('Invalid email address. Please check and try again.');
-      } else if (err.code === 'auth/weak-password') {
-        setError('Password is too weak. Please use a stronger password.');
-      } else if (err.code === 'auth/operation-not-allowed') {
-        setError('Email/Password sign-up is not enabled. Please enable it in Firebase Console.');
-      } else {
-        setError(err.message || 'Failed to create an account.');
-      }
     } finally {
       setLoading(false);
     }

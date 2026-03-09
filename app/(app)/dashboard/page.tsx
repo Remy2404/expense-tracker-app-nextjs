@@ -37,6 +37,7 @@ export default function DashboardPage() {
     mutate: mutateBudgets,
   } = useBudgets();
   const {
+    categories,
     isLoading: categoriesLoading,
     isError: categoriesError,
     mutate: mutateCategories,
@@ -91,7 +92,7 @@ export default function DashboardPage() {
   }, [currentBudget, currentMonthExpense]);
 
   const recentTransactions = useMemo(() => {
-    return sortExpensesByRecency(expenses).slice(0, 5);
+    return sortExpensesByRecency(expenses.filter((expense) => !expense.is_deleted)).slice(0, 5);
   }, [expenses]);
 
   const handleRetryDashboard = () => {
@@ -180,6 +181,7 @@ export default function DashboardPage() {
             </h2>
             <RecentTransactionsCard
               recentTransactions={recentTransactions}
+              categories={categories}
               onAddExpense={() => setIsAddModalOpen(true)}
             />
           </section>

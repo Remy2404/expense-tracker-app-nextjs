@@ -3,6 +3,7 @@ import useSWR from 'swr';
 import useSWRMutation from 'swr/mutation';
 import { useSWRConfig } from 'swr';
 import { supabase } from '@/lib/supabase';
+import { aiHttpClient } from '@/lib/api/http';
 import { financeApi, type FinanceSummaryPeriod, type FinanceSummaryResponse } from '@/lib/api/finance.api';
 import {
   syncApi,
@@ -57,35 +58,37 @@ const normalizeExpense = (expense: ExpenseWriteInput): Expense => {
 };
 
 const fetcher = async (table: string) => {
-  const { supabase: client } = await import('@/lib/supabase');
-  const {
-    data: { user },
-  } = await client.auth.getUser();
-
-  let baseQuery = client.from(table).select('*').neq('is_deleted', true);
-
-  if (user && ['expenses', 'categories', 'budgets', 'recurring_expenses', 'savings_goals'].includes(table)) {
-    baseQuery = baseQuery.eq('firebase_uid', user.id);
+  let url = '';
+  switch (table) {
+    case 'expenses':
+      url = '/api/expenses';
+      break;
+    case 'categories':
+      url = '/api/categories';
+      break;
+    case 'budgets':
+      url = '/api/budgets';
+      break;
+    case 'savings_goals':
+      url = '/api/goals';
+      break;
+    case 'recurring_expenses':
+      url = '/api/recurring-expenses';
+      break;
+    default:
+      throw new Error(`Unknown table: ${table}`);
   }
 
-  const query =
-    table === 'expenses'
-      ? baseQuery
-          .order('created_at', { ascending: false })
-          .order('updated_at', { ascending: false })
-          .order('date', { ascending: false })
-          .order('id', { ascending: false })
-      : baseQuery;
+  const response = await aiHttpClient.get(url);
+  const data = response.data;
 
-  const { data, error } = await query;
-  if (error) throw error;
   if (table === 'categories') {
-    return (data || []).map((category) => normalizeCategory(category as CategoryWriteInput));
+    return (data || []).map((category: CategoryWriteInput) => normalizeCategory(category));
   }
   if (table === 'expenses') {
-    return (data || []).map((expense) => normalizeExpense(expense as ExpenseWriteInput));
+    return (data || []).map((expense: ExpenseWriteInput) => normalizeExpense(expense));
   }
-  return data;
+  return data || [];
 };
 
 const nowIso = () => new Date().toISOString();
@@ -129,33 +132,38 @@ const revalidateFinanceSummary = (mutate: ReturnType<typeof useSWRConfig>['mutat
 };
 
 const fetchSingle = async <T>(table: string, id: string): Promise<T> => {
-  const { data, error } = await supabase.from(table).select('*').eq('id', id).single();
-  if (error) throw error;
-  return data as T;
+  let url = '';
+  switch (table) {
+    case 'expenses':
+      url = `/api/expenses/${id}`;
+      break;
+    case 'categories':
+      url = `/api/categories/${id}`;
+      break;
+    case 'budgets':
+      url = `/api/budgets/${id}`;
+      break;
+    case 'savings_goals':
+      url = `/api/goals/${id}`;
+      break;
+    case 'recurring_expenses':
+      url = `/api/recurring-expenses/${id}`;
+      break;
+    default:
+      throw new Error(`Unknown table: ${table}`);
+  }
+  const response = await aiHttpClient.get(url);
+  return response.data;
 };
 
 const fetchCategoryBudgetsByBudgetId = async (budgetId: string): Promise<SyncCategoryBudgetItem[]> => {
-  const { data, error } = await supabase
-    .from('category_budgets')
-    .select('category_id, amount')
-    .eq('budget_id', budgetId);
-  if (error) throw error;
-  return (data || []).map((item) => ({
-    category_id: item.category_id ?? null,
-    amount: Number(item.amount ?? 0),
-  }));
+  const budget = await fetchSingle<any>('budgets', budgetId);
+  return budget.category_budgets || [];
 };
 
 const fetchGoalTransactionsByGoalId = async (goalId: string): Promise<GoalTransaction[]> => {
-  const { data, error } = await supabase
-    .from('goal_transactions')
-    .select('*')
-    .eq('goal_id', goalId)
-    .order('date', { ascending: false })
-    .order('created_at', { ascending: false })
-    .order('id', { ascending: false });
-  if (error) throw error;
-  return (data || []) as GoalTransaction[];
+  const response = await aiHttpClient.get(`/api/goals/${goalId}/transactions`);
+  return response.data || [];
 };
 
 const toSyncCategoryItem = (category: CategoryWriteInput): SyncCategoryItem => {
@@ -297,7 +305,8 @@ const toSyncRecurringItem = (recurring: RecurringWriteInput): SyncRecurringItem 
 };
 
 export function useExpenses() {
-  const { data, error, isLoading, mutate } = useSWR<Expense[]>('expenses', fetcher, {
+  const { user } = useAuth();
+  const { data, error, isLoading, mutate } = useSWR<Expense[]>(user ? 'expenses' : null, fetcher, {
     revalidateOnFocus: true,
   });
 
@@ -310,9 +319,12 @@ export function useExpenses() {
 }
 
 export function useFinanceSummary(period: FinanceSummaryPeriod = 'all-time') {
-  const { data, error, isLoading, mutate } = useSWR<FinanceSummaryResponse>(['finance-summary', period], () => financeApi.getSummary(period), {
-    revalidateOnFocus: true,
-  });
+  const { user } = useAuth();
+  const { data, error, isLoading, mutate } = useSWR<FinanceSummaryResponse>(
+    user ? ['finance-summary', period] : null,
+    () => financeApi.getSummary(period),
+    { revalidateOnFocus: true },
+  );
 
   return {
     summary: data ?? null,
@@ -326,7 +338,7 @@ export function useCategories() {
   const { user } = useAuth();
   const seededRef = useRef<string | null>(null);
   const inFlightRef = useRef(false);
-  const { data, error, isLoading, mutate } = useSWR<Category[]>('categories', fetcher);
+  const { data, error, isLoading, mutate } = useSWR<Category[]>(user ? 'categories' : null, fetcher);
 
   useEffect(() => {
     if (!user?.uid || isLoading || !data || inFlightRef.current) return;
@@ -380,7 +392,8 @@ export function useCategories() {
 }
 
 export function useBudgets() {
-  const { data, error, isLoading, mutate } = useSWR<Budget[]>('budgets', fetcher);
+  const { user } = useAuth();
+  const { data, error, isLoading, mutate } = useSWR<Budget[]>(user ? 'budgets' : null, fetcher);
   return {
     budgets: data || [],
     isLoading,
@@ -450,7 +463,8 @@ export function useDeleteBudget() {
 }
 
 export function useGoals() {
-  const { data, error, isLoading, mutate } = useSWR<Goal[]>('savings_goals', fetcher);
+  const { user } = useAuth();
+  const { data, error, isLoading, mutate } = useSWR<Goal[]>(user ? 'savings_goals' : null, fetcher);
   return {
     goals: data || [],
     isLoading,
@@ -461,9 +475,16 @@ export function useGoals() {
 
 export function useBudgetByMonth(month: string) {
   const fetcherByMonth = async () => {
-    const { data, error } = await supabase.from('budgets').select('*').eq('month', month).single();
-    if (error && error.code !== 'PGRST116') throw error;
-    return data as Budget | null;
+    if (!month) return null;
+    try {
+      const response = await aiHttpClient.get(`/api/budgets/month/${month}`);
+      return response.data as Budget;
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        return null;
+      }
+      throw error;
+    }
   };
 
   const { data, error, isLoading, mutate } = useSWR(month ? ['budgets', month] : null, fetcherByMonth);
@@ -697,7 +718,8 @@ export function useDeleteExpense() {
 }
 
 export function useRecurringExpenses() {
-  const { data, error, isLoading, mutate } = useSWR<RecurringExpense[]>('recurring_expenses', fetcher);
+  const { user } = useAuth();
+  const { data, error, isLoading, mutate } = useSWR<RecurringExpense[]>(user ? 'recurring_expenses' : null, fetcher);
   return {
     recurringExpenses: data || [],
     isLoading,

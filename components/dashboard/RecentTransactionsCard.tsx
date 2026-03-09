@@ -5,21 +5,27 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getCurrencySymbol } from '@/lib/currencies';
 import { toSafeDate } from '@/lib/dates';
 import { sortExpensesByRecency } from '@/lib/expenseSort';
-import { Expense } from '@/types';
-import { getSignedTransactionAmount, getTransactionType } from '@/lib/transactions';
+import { Category, Expense } from '@/types';
+import { getSignedTransactionAmount } from '@/lib/transactions';
 
 type RecentTransactionsCardProps = {
   recentTransactions: Expense[];
+  categories: Category[];
   onAddExpense: () => void;
 };
 
 export function RecentTransactionsCard({
   recentTransactions,
+  categories,
   onAddExpense,
 }: RecentTransactionsCardProps) {
   const sortedRecentTransactions = useMemo(
     () => sortExpensesByRecency(recentTransactions),
     [recentTransactions]
+  );
+  const categoryNameById = useMemo(
+    () => new Map(categories.map((category) => [category.id, category.name])),
+    [categories]
   );
 
   return (
@@ -38,33 +44,45 @@ export function RecentTransactionsCard({
           />
         ) : (
           <ul className='space-y-3' aria-label='Recent transactions list'>
-            {sortedRecentTransactions.map((expense) => (
-              <li
-                key={expense.id}
-                className='flex items-center justify-between gap-3 rounded-lg border border-border/70 px-3 py-2.5'
-              >
-                <div className='min-w-0'>
-                  <p className='truncate text-sm font-medium'>{expense.notes || expense.note || 'Transaction'}</p>
-                  <div className='flex items-center gap-2 text-xs text-muted-foreground'>
-                    <time dateTime={toSafeDate(expense.date).toISOString()}>
-                      {toSafeDate(expense.date).toLocaleDateString()}
-                    </time>
-                    <Badge variant={getTransactionType(expense) === 'income' ? 'default' : 'secondary'}>
-                      {getTransactionType(expense) === 'income' ? 'Income' : 'Expense'}
-                    </Badge>
-                  </div>
-                </div>
-                <p
-                  className={`shrink-0 text-sm font-semibold ${
-                    getSignedTransactionAmount(expense) >= 0 ? 'text-emerald-600' : 'text-destructive'
-                  }`}
+            {sortedRecentTransactions.map((expense) => {
+              const categoryName = expense.category_id
+                ? categoryNameById.get(expense.category_id) ?? 'Uncategorized'
+                : undefined;
+              const subtitleCategory = categoryName ?? 'Uncategorized';
+              const title =
+                expense.notes ||
+                expense.note ||
+                expense.merchant ||
+                categoryName ||
+                'Transaction';
+
+              return (
+                <li
+                  key={expense.id}
+                  className='flex items-center justify-between gap-3 rounded-lg border border-border/70 px-3 py-2.5'
                 >
-                  {getSignedTransactionAmount(expense) >= 0 ? '+' : '-'}
-                  {getCurrencySymbol(expense.currency || 'USD')}
-                  {Math.abs(expense.amount).toFixed(2)}
-                </p>
-              </li>
-            ))}
+                  <div className='min-w-0'>
+                    <p className='truncate text-sm font-medium'>{title}</p>
+                    <div className='flex items-center gap-2 text-xs text-muted-foreground'>
+                      <span className='truncate'>{subtitleCategory}</span>
+                      <span aria-hidden='true'>&bull;</span>
+                      <time dateTime={toSafeDate(expense.date).toISOString()}>
+                        {toSafeDate(expense.date).toLocaleDateString()}
+                      </time>
+                    </div>
+                  </div>
+                  <p
+                    className={`shrink-0 text-sm font-semibold ${
+                      getSignedTransactionAmount(expense) >= 0 ? 'text-emerald-600' : 'text-destructive'
+                    }`}
+                  >
+                    {getSignedTransactionAmount(expense) >= 0 ? '+' : '-'}
+                    {getCurrencySymbol(expense.currency || 'USD')}
+                    {Math.abs(expense.amount).toFixed(2)}
+                  </p>
+                </li>
+              );
+            })}
           </ul>
         )}
       </CardContent>
