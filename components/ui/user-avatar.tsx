@@ -13,6 +13,27 @@ type UserAvatarProps = {
   alt?: string;
 };
 
+const getAvatarSrc = (photoURL?: string | null): string | null => {
+  if (!photoURL) {
+    return null;
+  }
+
+  try {
+    const parsedUrl = new URL(photoURL);
+    if (parsedUrl.protocol !== 'https:') {
+      return photoURL;
+    }
+
+    if (parsedUrl.hostname.endsWith('googleusercontent.com')) {
+      return `/api/avatar?url=${encodeURIComponent(photoURL)}`;
+    }
+  } catch {
+    return photoURL;
+  }
+
+  return photoURL;
+};
+
 export function UserAvatar({
   photoURL,
   displayName,
@@ -25,13 +46,14 @@ export function UserAvatar({
   const [imageFailed, setImageFailed] = useState(false);
   const label = displayName || email || 'User';
   const fallbackLetter = (displayName || email || '?').trim().charAt(0).toUpperCase() || '?';
-  const shouldShowImage = !!photoURL && !imageFailed;
+  const avatarSrc = getAvatarSrc(photoURL);
+  const shouldShowImage = !!avatarSrc && !imageFailed;
 
   return (
     <div className={cn('relative flex shrink-0 overflow-hidden rounded-full bg-primary/10', className)}>
       {shouldShowImage ? (
         <img
-          src={photoURL}
+          src={avatarSrc}
           alt={alt || `${label} avatar`}
           className={cn('h-full w-full object-cover', imageClassName)}
           referrerPolicy="no-referrer"
