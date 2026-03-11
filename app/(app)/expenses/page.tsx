@@ -18,7 +18,7 @@ import { buildExpenseCsv, downloadFile } from '@/lib/export';
 import { exportExpensesAsPdf } from '@/lib/export-pdf';
 import { getCurrencySymbol } from '@/lib/currencies';
 import { toSafeDate, toYearMonthKey } from '@/lib/dates';
-import { sortExpensesByRecency } from '@/lib/expenseSort';
+import { sortExpensesByTransactionDateTime } from '@/lib/expenseSort';
 import { Expense, TransactionType } from '@/types';
 import {
   getCategoryType,
@@ -145,7 +145,7 @@ export default function ExpensesPage() {
   }, [currentMonth, expenses, filters, periodMode]);
 
   const sortedFilteredExpenses = useMemo(
-    () => sortExpensesByRecency(filteredExpenses),
+    () => sortExpensesByTransactionDateTime(filteredExpenses),
     [filteredExpenses]
   );
 
