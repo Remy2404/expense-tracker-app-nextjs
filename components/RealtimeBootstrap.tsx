@@ -67,5 +67,20 @@ export function RealtimeBootstrap() {
     };
   }, [mutate, user]);
 
+  // Reconnect when the tab becomes visible again (e.g. after backgrounding or
+  // a backend restart). connect() is a no-op if the socket is already healthy.
+  useEffect(() => {
+    if (!user) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void webRealtimeClient.connect();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [user]);
+
   return null;
 }
