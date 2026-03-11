@@ -2,9 +2,12 @@ import { useEffect, useRef } from 'react';
 import useSWR from 'swr';
 import useSWRMutation from 'swr/mutation';
 import { useSWRConfig } from 'swr';
+import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { aiHttpClient } from '@/lib/api/http';
 import { financeApi, type FinanceSummaryPeriod, type FinanceSummaryResponse } from '@/lib/api/finance.api';
+import { dashboardApi, type DashboardSummaryResponse } from '@/lib/api/dashboard.api';
+import { budgetApi, type BudgetSummaryResponse } from '@/lib/api/budget.api';
 import {
   syncApi,
   type SyncPushRequest,
@@ -16,6 +19,7 @@ import {
   type SyncGoalTransactionItem,
   type SyncRecurringItem,
 } from '@/lib/api/sync.api';
+import { getSyncPushFailureMessage } from '@/lib/sync/pushResult';
 import { Expense, Category, CategoryType, Budget, RecurringExpense } from '@/types';
 import { Goal, GoalTransaction } from '@/types/goals';
 import { useAuth } from '@/contexts/AuthContext';
@@ -121,14 +125,24 @@ const createSyncPayload = (): SyncPushRequest => ({
 });
 
 const pushSyncChange = async (changes: Partial<SyncPushRequest>) => {
-  await syncApi.pushChanges({
+  const response = await syncApi.pushChanges({
     ...createSyncPayload(),
     ...changes,
   });
+  const failureMessage = getSyncPushFailureMessage(response);
+  if (failureMessage) {
+    toast.error(failureMessage);
+    throw new Error(failureMessage);
+  }
 };
 
 const revalidateFinanceSummary = (mutate: ReturnType<typeof useSWRConfig>['mutate']) => {
-  void mutate((key: unknown) => Array.isArray(key) && key[0] === 'finance-summary');
+  void mutate((key: unknown) => {
+    if (Array.isArray(key)) {
+      return key[0] === 'finance-summary' || key[0] === 'budget-summary';
+    }
+    return key === 'dashboard-summary';
+  });
 };
 
 const fetchSingle = async <T>(table: string, id: string): Promise<T> => {
@@ -323,6 +337,38 @@ export function useFinanceSummary(period: FinanceSummaryPeriod = 'all-time') {
   const { data, error, isLoading, mutate } = useSWR<FinanceSummaryResponse>(
     user ? ['finance-summary', period] : null,
     () => financeApi.getSummary(period),
+    { revalidateOnFocus: true },
+  );
+
+  return {
+    summary: data ?? null,
+    isLoading,
+    isError: error,
+    mutate,
+  };
+}
+
+export function useDashboardSummary() {
+  const { user } = useAuth();
+  const { data, error, isLoading, mutate } = useSWR<DashboardSummaryResponse>(
+    user ? 'dashboard-summary' : null,
+    () => dashboardApi.getSummary(),
+    { revalidateOnFocus: true },
+  );
+
+  return {
+    summary: data ?? null,
+    isLoading,
+    isError: error,
+    mutate,
+  };
+}
+
+export function useBudgetSummary(month: string) {
+  const { user } = useAuth();
+  const { data, error, isLoading, mutate } = useSWR<BudgetSummaryResponse>(
+    user && month ? ['budget-summary', month] : null,
+    () => budgetApi.getSummary(month),
     { revalidateOnFocus: true },
   );
 

@@ -11,6 +11,9 @@ const shouldRevalidateKey = (key: unknown, entities?: string[]) => {
     if (key === '/api/ai/nudges') {
       return true;
     }
+    if (key === 'dashboard-summary') {
+      return true;
+    }
     if (key === 'expenses') {
       return entities == null || entitySet.size === 0 || entitySet.has('expenses');
     }
@@ -30,6 +33,9 @@ const shouldRevalidateKey = (key: unknown, entities?: string[]) => {
   }
 
   if (Array.isArray(key) && key[0] === 'finance-summary') {
+    return true;
+  }
+  if (Array.isArray(key) && key[0] === 'budget-summary') {
     return true;
   }
 
