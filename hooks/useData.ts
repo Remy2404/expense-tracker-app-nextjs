@@ -137,12 +137,16 @@ const pushSyncChange = async (changes: Partial<SyncPushRequest>) => {
 };
 
 const revalidateFinanceSummary = (mutate: ReturnType<typeof useSWRConfig>['mutate']) => {
-  void mutate((key: unknown) => {
-    if (Array.isArray(key)) {
-      return key[0] === 'finance-summary' || key[0] === 'budget-summary';
-    }
-    return key === 'dashboard-summary';
-  });
+  void mutate(
+    (key: unknown) => {
+      if (Array.isArray(key)) {
+        return key[0] === 'finance-summary' || key[0] === 'budget-summary';
+      }
+      return key === 'dashboard-summary';
+    },
+    undefined,
+    { revalidate: true },
+  );
 };
 
 const fetchSingle = async <T>(table: string, id: string): Promise<T> => {
