@@ -1,4 +1,4 @@
-import axios, { AxiosError } from 'axios';
+import axios, { AxiosError, AxiosHeaders } from 'axios';
 import { AiApiError } from '@/types/ai';
 
 const DEFAULT_TIMEOUT_MS = 20_000;
@@ -40,6 +40,33 @@ export const aiHttpClient = axios.create({
     Accept: 'application/json',
     'Content-Type': 'application/json',
   },
+});
+
+aiHttpClient.interceptors.request.use(async (config) => {
+  if (typeof window === 'undefined') {
+    return config;
+  }
+
+  try {
+    const { auth } = await import('@/lib/firebase');
+    const firebaseUser = auth.currentUser;
+    if (!firebaseUser) {
+      return config;
+    }
+
+    const idToken = await firebaseUser.getIdToken();
+    if (!idToken) {
+      return config;
+    }
+
+    const headers = AxiosHeaders.from(config.headers);
+    headers.set('Authorization', `Bearer ${idToken}`);
+    config.headers = headers;
+  } catch {
+    // Ignore token attach failures and let the backend return 401 when needed.
+  }
+
+  return config;
 });
 
 aiHttpClient.interceptors.response.use(

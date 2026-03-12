@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getAuth, Auth, inMemoryPersistence, setPersistence } from 'firebase/auth';
+import { browserLocalPersistence, getAuth, Auth, inMemoryPersistence, setPersistence } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || 'dummy_api_key',
@@ -12,8 +12,9 @@ const firebaseConfig = {
 
 const app: FirebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const auth: Auth = getAuth(app);
+const persistence = typeof window === 'undefined' ? inMemoryPersistence : browserLocalPersistence;
 
-export const authPersistenceReady = setPersistence(auth, inMemoryPersistence).catch((error) => {
+export const authPersistenceReady = setPersistence(auth, persistence).catch((error) => {
   console.error('Failed to set auth persistence:', error);
 });
 
