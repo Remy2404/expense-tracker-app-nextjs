@@ -1,10 +1,16 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { Loader2, Sparkles, X, TriangleAlert, CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, Loader2, Paperclip, Sparkles, TriangleAlert, Trash2, X } from 'lucide-react';
 import { useAiParse } from '@/hooks/useAi';
 import { useAddExpense, useEditExpense, useCategories } from '@/hooks/useData';
+import {
+  resolveReceiptPreviewUrl,
+  toUploadErrorMessage,
+  uploadReceiptFile,
+  type UploadedReceipt,
+} from '@/lib/media/imagekit-upload';
 import { Expense, TransactionType } from '@/types';
 import { AiParseResponse } from '@/types/ai';
 import { useForm, useWatch } from 'react-hook-form';
@@ -50,6 +56,7 @@ interface AddExpenseModalProps {
 }
 
 const todayDate = () => new Date().toISOString().split('T')[0];
+const MAX_RECEIPTS = 5;
 const transactionTypeOptions: Array<{ value: TransactionType; label: string }> = [
   { value: 'expense', label: 'Expense' },
   { value: 'income', label: 'Income' },
@@ -75,6 +82,9 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
   const [parsedData, setParsedData] = useState<AiParseResponse | null>(null);
   const [aiParseError, setAiParseError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [receiptItems, setReceiptItems] = useState<UploadedReceipt[]>([]);
+  const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
+  const [receiptUploadError, setReceiptUploadError] = useState<string | null>(null);
 
   const { categories, isLoading: isCategoriesLoading } = useCategories();
   const { trigger: parseAi, isMutating: isParsing } = useAiParse();
@@ -137,6 +147,45 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
   }, [expenseToEdit, isOpen, setValue]);
 
   useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    let cancelled = false;
+    const initialReceiptPaths = expenseToEdit?.receipt_paths ?? [];
+
+    const resolveExistingReceipts = async () => {
+      if (initialReceiptPaths.length === 0) {
+        if (!cancelled) {
+          setReceiptItems([]);
+        }
+        return;
+      }
+
+      const resolvedItems = await Promise.all(
+        initialReceiptPaths.map(async (path) => {
+          try {
+            const previewUrl = await resolveReceiptPreviewUrl(path);
+            return { path, previewUrl };
+          } catch {
+            return { path, previewUrl: path };
+          }
+        })
+      );
+
+      if (!cancelled) {
+        setReceiptItems(resolvedItems);
+      }
+    };
+
+    void resolveExistingReceipts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [expenseToEdit, isOpen]);
+
+  useEffect(() => {
     if (!selectedCategoryId) return;
     const selectedCategory = categories.find((category) => category.id === selectedCategoryId);
     if (!selectedCategory) return;
@@ -156,6 +205,9 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
     setParsedData(null);
     setAiParseError(null);
     setSubmitError(null);
+    setReceiptItems([]);
+    setReceiptUploadError(null);
+    setIsUploadingReceipt(false);
     reset({
       transaction_type: 'expense',
       amount: undefined,
@@ -172,6 +224,59 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
     setParsedData(null);
     setAiParseError(null);
     setSubmitError(null);
+  };
+
+  const handleRemoveReceipt = (path: string) => {
+    setReceiptUploadError(null);
+    setReceiptItems((prev) => prev.filter((receipt) => receipt.path !== path));
+  };
+
+  const handleReceiptInputChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(event.target.files ?? []);
+    event.currentTarget.value = '';
+
+    if (selectedFiles.length === 0) {
+      return;
+    }
+
+    setReceiptUploadError(null);
+    const availableSlots = Math.max(0, MAX_RECEIPTS - receiptItems.length);
+    if (availableSlots === 0) {
+      setReceiptUploadError(`You can upload up to ${MAX_RECEIPTS} receipts.`);
+      return;
+    }
+
+    const filesToUpload = selectedFiles.slice(0, availableSlots);
+    if (selectedFiles.length > availableSlots) {
+      setReceiptUploadError(`Only ${availableSlots} file(s) were uploaded due to the ${MAX_RECEIPTS} receipt limit.`);
+    }
+
+    setIsUploadingReceipt(true);
+    const uploadedItems: UploadedReceipt[] = [];
+
+    for (const file of filesToUpload) {
+      try {
+        const uploaded = await uploadReceiptFile(file);
+        uploadedItems.push(uploaded);
+      } catch (error) {
+        setReceiptUploadError(toUploadErrorMessage(error, `Failed to upload ${file.name}.`));
+      }
+    }
+
+    setIsUploadingReceipt(false);
+    if (uploadedItems.length === 0) {
+      return;
+    }
+
+    setReceiptItems((prev) => {
+      const merged = [...prev];
+      for (const item of uploadedItems) {
+        if (!merged.some((existing) => existing.path === item.path)) {
+          merged.push(item);
+        }
+      }
+      return merged;
+    });
   };
 
   const handleAiParse = async (event: FormEvent) => {
@@ -215,6 +320,7 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
         notes: data.note?.trim() ? data.note.trim() : undefined,
         date: data.date ? new Date(data.date).toISOString() : new Date().toISOString(),
         category_id: selectedCategory,
+        receipt_paths: receiptItems.map((item) => item.path),
       };
 
       if (isEditMode && expenseToEdit) {
@@ -493,6 +599,73 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
                         </p>
                       ) : null}
                     </div>
+
+                    <div className="space-y-2 sm:col-span-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium" htmlFor="expense-receipt-upload">
+                          Receipts
+                        </label>
+                        <span className="text-xs text-muted-foreground">
+                          {receiptItems.length}/{MAX_RECEIPTS}
+                        </span>
+                      </div>
+
+                      <label
+                        htmlFor="expense-receipt-upload"
+                        className={cn(
+                          'inline-flex h-10 cursor-pointer items-center gap-2 rounded-md border border-border bg-background px-3 text-sm',
+                          'hover:bg-muted/60',
+                          (isUploadingReceipt || receiptItems.length >= MAX_RECEIPTS) &&
+                            'cursor-not-allowed opacity-50'
+                        )}
+                      >
+                        {isUploadingReceipt ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Paperclip className="h-4 w-4" />
+                        )}
+                        {isUploadingReceipt ? 'Uploading...' : 'Upload receipt images'}
+                        <input
+                          id="expense-receipt-upload"
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/heic"
+                          multiple
+                          disabled={isUploadingReceipt || receiptItems.length >= MAX_RECEIPTS}
+                          className="hidden"
+                          onChange={handleReceiptInputChange}
+                        />
+                      </label>
+
+                      {receiptItems.length > 0 ? (
+                        <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+                          {receiptItems.map((receipt) => (
+                            <div key={receipt.path} className="relative overflow-hidden rounded-md border border-border">
+                              <img
+                                src={receipt.previewUrl}
+                                alt="Receipt preview"
+                                className="h-20 w-full object-cover"
+                              />
+                              <button
+                                type="button"
+                                className="absolute right-1 top-1 rounded-full bg-background/90 p-1 text-muted-foreground hover:text-destructive"
+                                onClick={() => handleRemoveReceipt(receipt.path)}
+                                aria-label="Remove receipt"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          Optional. Attach receipts to keep proof with this transaction.
+                        </p>
+                      )}
+
+                      {receiptUploadError ? (
+                        <p className="text-xs text-destructive">{receiptUploadError}</p>
+                      ) : null}
+                    </div>
                   </CardContent>
                 </Card>
 
@@ -505,7 +678,7 @@ export function AddExpenseModal({ isOpen, onClose, expenseToEdit }: AddExpenseMo
                   <Button type="button" variant="ghost" onClick={handleClose}>
                     Cancel
                   </Button>
-                  <Button type="submit" disabled={isMutating}>
+                  <Button type="submit" disabled={isMutating || isUploadingReceipt}>
                     {isMutating ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />

@@ -1,8 +1,22 @@
 'use client';
 
+import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { useEffect, useMemo, useState } from 'react';
 import { ReadonlyURLSearchParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Download, Edit2, FileText, Filter, Loader2, Plus, Trash2, TriangleAlert } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Edit2,
+  FileText,
+  Filter,
+  Loader2,
+  Paperclip,
+  Plus,
+  Trash2,
+  TriangleAlert,
+  X,
+} from 'lucide-react';
 import { useExpenses, useCategories, useDeleteExpense, useFinanceSummary } from '@/hooks/useData';
 import { AddExpenseModal } from '@/components/AddExpenseModal';
 import { DeleteExpenseDialog } from '@/components/expenses/DeleteExpenseDialog';
@@ -30,6 +44,10 @@ import {
 
 type ExportRange = 'all' | 'current-month';
 type TransactionTypeFilter = 'all' | TransactionType;
+type ReceiptPreviewState = {
+  receiptPaths: string[];
+  activeIndex: number;
+};
 const getPeriodModeFromSearchParams = (
   searchParams: URLSearchParams | ReadonlyURLSearchParams
 ): PeriodMode => (searchParams.get('period') === 'this-month' ? 'this-month' : 'all-time');
@@ -53,6 +71,7 @@ const EMPTY_FILTERS: ExpenseFilters = {
   minAmount: '',
   maxAmount: '',
 };
+const RECEIPT_THUMBNAIL_LIMIT = 3;
 
 const getFiltersFromSearchParams = (searchParams: URLSearchParams | ReadonlyURLSearchParams): ExpenseFilters => ({
   transactionType: (searchParams.get('type') as TransactionTypeFilter) || 'all',
@@ -102,6 +121,7 @@ export default function ExpensesPage() {
   const [filters, setFilters] = useState<ExpenseFilters>(() =>
     getFiltersFromSearchParams(new URLSearchParams(searchParams.toString()))
   );
+  const [receiptPreview, setReceiptPreview] = useState<ReceiptPreviewState | null>(null);
   const summaryPeriod = periodMode === 'this-month' ? 'this-month' : 'all-time';
   const { summary } = useFinanceSummary(summaryPeriod);
 
@@ -221,6 +241,40 @@ export default function ExpensesPage() {
   const handleCloseModal = () => {
     setIsAddModalOpen(false);
     setTimeout(() => setExpenseToEdit(null), 200);
+  };
+
+  const activePreviewReceiptPath = receiptPreview?.receiptPaths[receiptPreview.activeIndex] ?? null;
+  const canNavigatePreviewBackward = receiptPreview ? receiptPreview.activeIndex > 0 : false;
+  const canNavigatePreviewForward = receiptPreview
+    ? receiptPreview.activeIndex < receiptPreview.receiptPaths.length - 1
+    : false;
+
+  const openReceiptPreview = (receiptPaths: string[], activeIndex: number) => {
+    if (receiptPaths.length === 0) return;
+    setReceiptPreview({ receiptPaths, activeIndex });
+  };
+
+  const closeReceiptPreview = () => {
+    setReceiptPreview(null);
+  };
+
+  const handlePreviewOpenChange = (open: boolean) => {
+    if (open) return;
+    closeReceiptPreview();
+  };
+
+  const showPreviousReceipt = () => {
+    setReceiptPreview((prev) => {
+      if (!prev || prev.activeIndex === 0) return prev;
+      return { ...prev, activeIndex: prev.activeIndex - 1 };
+    });
+  };
+
+  const showNextReceipt = () => {
+    setReceiptPreview((prev) => {
+      if (!prev || prev.activeIndex >= prev.receiptPaths.length - 1) return prev;
+      return { ...prev, activeIndex: prev.activeIndex + 1 };
+    });
   };
 
   const updateFilter = (key: keyof ExpenseFilters, value: string) => {
@@ -519,54 +573,164 @@ export default function ExpensesPage() {
               </CardContent>
             ) : (
               <div className="divide-y divide-border">
-                {sortedFilteredExpenses.map((expense) => (
-                  <div key={expense.id} className="flex items-center justify-between gap-4 p-4 sm:p-5">
-                    <div className="min-w-0 space-y-1">
-                      <p className="truncate font-medium">{expense.notes || expense.note || 'Transaction'}</p>
-                      <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                        <Badge variant="outline">{getCategoryName(expense.category_id)}</Badge>
-                        <Badge variant={getTransactionType(expense) === 'income' ? 'default' : 'secondary'}>
-                          {getTransactionType(expense) === 'income' ? 'Income' : 'Expense'}
-                        </Badge>
-                        <span>{toSafeDate(expense.date).toLocaleDateString()}</span>
+                {sortedFilteredExpenses.map((expense) => {
+                  const receiptPaths = expense.receipt_paths ?? [];
+                  const visibleReceipts = receiptPaths.slice(0, RECEIPT_THUMBNAIL_LIMIT);
+                  const hiddenReceiptCount = Math.max(0, receiptPaths.length - RECEIPT_THUMBNAIL_LIMIT);
+                  const expenseLabel = expense.notes || expense.note || 'Transaction';
+
+                  return (
+                    <div key={expense.id} className="flex items-center justify-between gap-4 p-4 sm:p-5">
+                      <div className="min-w-0 space-y-1">
+                        <p className="truncate font-medium">{expenseLabel}</p>
+                        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                          <Badge variant="outline">{getCategoryName(expense.category_id)}</Badge>
+                          <Badge variant={getTransactionType(expense) === 'income' ? 'default' : 'secondary'}>
+                            {getTransactionType(expense) === 'income' ? 'Income' : 'Expense'}
+                          </Badge>
+                          <span>{toSafeDate(expense.date).toLocaleDateString()}</span>
+                          {receiptPaths.length > 0 ? (
+                            <Badge variant="outline" className="inline-flex items-center gap-1">
+                              <Paperclip className="h-3 w-3" />
+                              {receiptPaths.length} receipt
+                              {receiptPaths.length === 1 ? '' : 's'}
+                            </Badge>
+                          ) : null}
+                        </div>
+                        {receiptPaths.length > 0 ? (
+                          <div className="mt-2 flex items-center gap-1">
+                            {visibleReceipts.map((receiptPath, index) => (
+                              <button
+                                key={`${expense.id}-receipt-${index}`}
+                                type="button"
+                                className="h-8 w-8 overflow-hidden rounded border border-border bg-muted transition hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                onClick={() => openReceiptPreview(receiptPaths, index)}
+                                aria-label={`Preview receipt ${index + 1} for ${expenseLabel}`}
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={receiptPath}
+                                  alt={`Receipt ${index + 1}`}
+                                  className="h-full w-full object-cover"
+                                  loading="lazy"
+                                  referrerPolicy="no-referrer"
+                                />
+                              </button>
+                            ))}
+                            {hiddenReceiptCount > 0 ? (
+                              <button
+                                type="button"
+                                className="h-8 rounded border border-border px-2 text-xs text-muted-foreground transition hover:border-primary/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                onClick={() => openReceiptPreview(receiptPaths, RECEIPT_THUMBNAIL_LIMIT)}
+                                aria-label={`Preview ${hiddenReceiptCount} more receipt${hiddenReceiptCount === 1 ? '' : 's'}`}
+                              >
+                                +{hiddenReceiptCount}
+                              </button>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div className="flex items-center gap-1 sm:gap-3">
+                        <p
+                          className={`text-right text-base font-semibold sm:text-lg ${
+                            getSignedTransactionAmount(expense) >= 0 ? 'text-emerald-600' : 'text-destructive'
+                          }`}
+                        >
+                          {getSignedTransactionAmount(expense) >= 0 ? '+' : '-'}
+                          {getCurrencySymbol(expense.currency || 'USD')}
+                          {Math.abs(expense.amount).toFixed(2)}
+                        </p>
+                        <Button type="button" variant="ghost" size="icon" onClick={() => handleEdit(expense)} aria-label="Edit transaction">
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleRequestDelete(expense)}
+                          disabled={deletingId === expense.id}
+                          aria-label="Delete transaction"
+                        >
+                          {deletingId === expense.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-destructive" />
+                          ) : (
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          )}
+                        </Button>
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-1 sm:gap-3">
-                      <p
-                        className={`text-right text-base font-semibold sm:text-lg ${
-                          getSignedTransactionAmount(expense) >= 0 ? 'text-emerald-600' : 'text-destructive'
-                        }`}
-                      >
-                        {getSignedTransactionAmount(expense) >= 0 ? '+' : '-'}
-                        {getCurrencySymbol(expense.currency || 'USD')}
-                        {Math.abs(expense.amount).toFixed(2)}
-                      </p>
-                      <Button type="button" variant="ghost" size="icon" onClick={() => handleEdit(expense)} aria-label="Edit transaction">
-                        <Edit2 className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleRequestDelete(expense)}
-                        disabled={deletingId === expense.id}
-                        aria-label="Delete transaction"
-                      >
-                        {deletingId === expense.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin text-destructive" />
-                        ) : (
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </Card>
         </>
       )}
+
+      <DialogPrimitive.Root open={Boolean(receiptPreview)} onOpenChange={handlePreviewOpenChange}>
+        <DialogPrimitive.Portal>
+          <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/70 data-[state=open]:animate-in data-[state=closed]:animate-out" />
+          <DialogPrimitive.Content className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-3xl -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-border bg-background shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <div className="space-y-1">
+                <DialogPrimitive.Title className="text-lg font-semibold">Receipt preview</DialogPrimitive.Title>
+                <DialogPrimitive.Description className="text-sm text-muted-foreground">
+                  {receiptPreview ? `Receipt ${receiptPreview.activeIndex + 1} of ${receiptPreview.receiptPaths.length}` : ''}
+                </DialogPrimitive.Description>
+              </div>
+              <DialogPrimitive.Close asChild>
+                <Button type="button" variant="ghost" size="icon" aria-label="Close receipt preview">
+                  <X className="h-4 w-4" />
+                </Button>
+              </DialogPrimitive.Close>
+            </div>
+
+            <div className="relative flex max-h-[80vh] min-h-[18rem] items-center justify-center bg-muted/30 p-4">
+              {activePreviewReceiptPath ? (
+                <>
+                  <div
+                    role="img"
+                    aria-label="Receipt preview"
+                    className="h-[72vh] w-full max-w-full rounded-md bg-contain bg-center bg-no-repeat"
+                    style={{
+                      backgroundImage: `url("${activePreviewReceiptPath}")`,
+                    }}
+                  />
+                  {receiptPreview && receiptPreview.receiptPaths.length > 1 ? (
+                    <>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="icon"
+                        className="absolute left-3 top-1/2 -translate-y-1/2"
+                        onClick={showPreviousReceipt}
+                        disabled={!canNavigatePreviewBackward}
+                        aria-label="Show previous receipt"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="icon"
+                        className="absolute right-3 top-1/2 -translate-y-1/2"
+                        onClick={showNextReceipt}
+                        disabled={!canNavigatePreviewForward}
+                        aria-label="Show next receipt"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </>
+                  ) : null}
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">Receipt image is unavailable.</p>
+              )}
+            </div>
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>
 
       <AddExpenseModal isOpen={isAddModalOpen} onClose={handleCloseModal} expenseToEdit={expenseToEdit} />
       <DeleteExpenseDialog

@@ -133,4 +133,33 @@ describe('ExpensesPage', () => {
 
     expect(screen.getByTestId('add-expense-modal')).toBeInTheDocument();
   });
+
+  it('opens receipt preview modal when clicking a receipt thumbnail', async () => {
+    const user = userEvent.setup();
+    mockUseExpenses.mockReturnValue({
+      expenses: [
+        {
+          id: 'exp-with-receipts',
+          amount: 65,
+          date: '2025-01-12T00:00:00.000Z',
+          notes: 'Groceries',
+          category_id: 'cat-food',
+          currency: 'USD',
+          receipt_paths: ['https://cdn.example.com/receipt-1.jpg', 'https://cdn.example.com/receipt-2.jpg'],
+        },
+      ],
+      isLoading: false,
+      isError: undefined,
+    });
+
+    render(<ExpensesPage />);
+
+    await user.click(screen.getByRole('button', { name: /Preview receipt 1 for Groceries/i }));
+
+    expect(screen.getByText('Receipt preview')).toBeInTheDocument();
+    expect(screen.getByText('Receipt 1 of 2')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Show next receipt/i }));
+    expect(screen.getByText('Receipt 2 of 2')).toBeInTheDocument();
+  });
 });
