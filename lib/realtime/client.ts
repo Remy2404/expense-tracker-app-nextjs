@@ -14,20 +14,33 @@ type RealtimeEventMap = {
 type RealtimeEventName = keyof RealtimeEventMap;
 type RealtimeHandler<T extends RealtimeEventName> = (payload: RealtimeEventMap[T]) => void;
 
+const RECONNECT_BACKOFF_INITIAL_MS = 5_000; 
+const RECONNECT_BACKOFF_MAX_MS = 120_000; 
+const CONNECT_TIMEOUT_MS = 20_000;
+
 class WebRealtimeClient {
-  private static readonly CONNECT_TIMEOUT_MS = 10_000;
-  private static readonly RETRY_COOLDOWN_MS = 30_000;
   private socket: Socket | null = null;
   private activeUid: string | null = null;
   private listeners = new Map<RealtimeEventName, Set<(payload: unknown) => void>>();
   private connectPromise: Promise<void> | null = null;
-  private disabledUntil = 0;
+  private reconnectAttempts = 0;
+  private reconnectTimerId: ReturnType<typeof setTimeout> | null = null;
+
+  private get reconnectDelayMs(): number {
+    const delay = RECONNECT_BACKOFF_INITIAL_MS * Math.pow(2, this.reconnectAttempts);
+    return Math.min(delay, RECONNECT_BACKOFF_MAX_MS);
+  }
 
   async connect(): Promise<void> {
     const uid = auth.currentUser?.uid;
     if (!uid) {
       this.disconnect();
       return;
+    }
+
+    if (this.reconnectTimerId !== null) {
+      clearTimeout(this.reconnectTimerId);
+      this.reconnectTimerId = null;
     }
 
     if (this.socket && this.activeUid === uid && this.socket.connected) {
@@ -38,25 +51,19 @@ class WebRealtimeClient {
       return this.connectPromise;
     }
 
-    if (this.disabledUntil > Date.now()) {
-      return;
-    }
-
     this.connectPromise = (async () => {
       const session = await aiApi.getRealtimeSession();
       if (!session.socket_url) {
-        this.disabledUntil = Date.now() + WebRealtimeClient.RETRY_COOLDOWN_MS;
+        this.scheduleReconnect();
         return;
       }
 
       this.socket?.disconnect();
       const socket = io(session.socket_url, {
         transports: ['websocket'],
-        auth: {
-          token: session.token,
-        },
+        auth: { token: session.token },
         autoConnect: false,
-        reconnection: true,
+        reconnection: false, // Managed manually to refresh the session token on each attempt.
       });
 
       this.socket = socket;
@@ -64,25 +71,30 @@ class WebRealtimeClient {
       this.bindSocket(socket);
       socket.connect();
       await this.awaitSocketConnection(socket);
-      this.disabledUntil = 0;
+
+      // Successful connect — reset backoff.
+      this.reconnectAttempts = 0;
     })();
 
     try {
       await this.connectPromise;
-    } catch (error) {
-      this.disabledUntil = Date.now() + WebRealtimeClient.RETRY_COOLDOWN_MS;
-      this.disconnect();
-      throw error;
+    } catch {
+      this.scheduleReconnect();
     } finally {
       this.connectPromise = null;
     }
   }
 
   disconnect(): void {
+    if (this.reconnectTimerId !== null) {
+      clearTimeout(this.reconnectTimerId);
+      this.reconnectTimerId = null;
+    }
     this.socket?.disconnect();
     this.socket = null;
     this.activeUid = null;
     this.connectPromise = null;
+    this.reconnectAttempts = 0;
   }
 
   subscribe<T extends RealtimeEventName>(eventName: T, handler: RealtimeHandler<T>): () => void {
@@ -92,14 +104,22 @@ class WebRealtimeClient {
 
     return () => {
       const currentHandlers = this.listeners.get(eventName);
-      if (!currentHandlers) {
-        return;
-      }
+      if (!currentHandlers) return;
       currentHandlers.delete(handler as (payload: unknown) => void);
       if (currentHandlers.size === 0) {
         this.listeners.delete(eventName);
       }
     };
+  }
+
+  private scheduleReconnect(): void {
+    if (this.reconnectTimerId !== null) return;
+    const delay = this.reconnectDelayMs;
+    this.reconnectAttempts += 1;
+    this.reconnectTimerId = setTimeout(() => {
+      this.reconnectTimerId = null;
+      void this.connect();
+    }, delay);
   }
 
   private bindSocket(socket: Socket): void {
@@ -113,19 +133,21 @@ class WebRealtimeClient {
     events.forEach((eventName) => {
       socket.on(eventName, (payload: unknown) => {
         const handlers = this.listeners.get(eventName);
-        if (!handlers) {
-          return;
-        }
+        if (!handlers) return;
         handlers.forEach((handler) => handler(payload));
       });
     });
 
+    // Reconnect only on unexpected disconnects.
     socket.on('disconnect', (reason) => {
-      if (reason === 'io server disconnect') {
-        void this.connect().catch((error) => {
-          console.warn('Realtime reconnect failed in web client.', error);
-        });
+      if (reason === 'io client disconnect') {
+        return;
       }
+      this.scheduleReconnect();
+    });
+
+    socket.on('connect_error', () => {
+      this.scheduleReconnect();
     });
   }
 
@@ -133,27 +155,21 @@ class WebRealtimeClient {
     return new Promise((resolve, reject) => {
       let settled = false;
       const timeoutId = window.setTimeout(() => {
-        if (settled) {
-          return;
-        }
+        if (settled) return;
         settled = true;
         cleanup();
         reject(new Error('Realtime connection timed out.'));
-      }, WebRealtimeClient.CONNECT_TIMEOUT_MS);
+      }, CONNECT_TIMEOUT_MS);
 
       const handleConnect = () => {
-        if (settled) {
-          return;
-        }
+        if (settled) return;
         settled = true;
         cleanup();
         resolve();
       };
 
       const handleConnectError = (error: Error) => {
-        if (settled) {
-          return;
-        }
+        if (settled) return;
         settled = true;
         cleanup();
         reject(error);

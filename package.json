@@ -3,12 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node ./scripts/dev-with-relay.mjs",
+    "dev:next": "next dev",
+    "dev:relay": "node --env-file=.env.local ./scripts/realtime-relay.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "test": "jest",
-    "realtime:relay": "node ./scripts/realtime-relay.mjs"
+    "realtime:relay": "npm run dev:relay"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

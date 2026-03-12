@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useSWRConfig } from 'swr';
 import { useAuth } from '@/contexts/AuthContext';
 import { webRealtimeClient } from '@/lib/realtime/client';
@@ -9,6 +9,9 @@ const shouldRevalidateKey = (key: unknown, entities?: string[]) => {
   if (typeof key === 'string') {
     const entitySet = new Set(entities ?? []);
     if (key === '/api/ai/nudges') {
+      return true;
+    }
+    if (key === 'dashboard-summary') {
       return true;
     }
     if (key === 'expenses') {
@@ -32,6 +35,9 @@ const shouldRevalidateKey = (key: unknown, entities?: string[]) => {
   if (Array.isArray(key) && key[0] === 'finance-summary') {
     return true;
   }
+  if (Array.isArray(key) && key[0] === 'budget-summary') {
+    return true;
+  }
 
   return false;
 };
@@ -39,16 +45,22 @@ const shouldRevalidateKey = (key: unknown, entities?: string[]) => {
 export function RealtimeBootstrap() {
   const { user } = useAuth();
   const { mutate } = useSWRConfig();
+  const uid = user?.uid ?? null;
+  const mutateRef = useRef(mutate);
 
   useEffect(() => {
-    if (!user) {
+    mutateRef.current = mutate;
+  }, [mutate]);
+
+  useEffect(() => {
+    if (!uid) {
       webRealtimeClient.disconnect();
       return;
     }
 
     void webRealtimeClient.connect();
     const unsubscribe = webRealtimeClient.subscribe('sync.updated', (payload) => {
-      void mutate(
+      void mutateRef.current(
         (key) => shouldRevalidateKey(key, payload.entities),
         undefined,
         { revalidate: true }
@@ -57,9 +69,21 @@ export function RealtimeBootstrap() {
 
     return () => {
       unsubscribe();
-      webRealtimeClient.disconnect();
     };
-  }, [mutate, user]);
+  }, [uid]);
+
+  useEffect(() => {
+    if (!uid) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void webRealtimeClient.connect();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [uid]);
 
   return null;
 }
