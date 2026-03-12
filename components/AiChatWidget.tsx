@@ -56,6 +56,7 @@ const getStreamingMessageId = (requestId: string) => `assistant-stream-${request
 
 export function AiChatWidget() {
   const { user } = useAuth();
+  const uid = user?.uid ?? null;
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<AiChatMessage[]>([INITIAL_ASSISTANT_MESSAGE]);
   const [input, setInput] = useState('');
@@ -111,13 +112,13 @@ export function AiChatWidget() {
   }, [isOpen, isStreaming, messages, scrollToBottom]);
 
   useEffect(() => {
-    if (!user) {
+    if (!uid) {
       pendingRequestIdsRef.current.clear();
       streamedRequestIdsRef.current.clear();
       completedRequestIdsRef.current.clear();
       webRealtimeClient.disconnect();
     }
-  }, [user]);
+  }, [uid]);
 
   const upsertAssistantMessage = useCallback((content: string, requestId?: string) => {
     const trimmedContent = formatAssistantContent(content.trim());
@@ -204,7 +205,7 @@ export function AiChatWidget() {
   }, [addExpense, formatAssistantContent, mutate, resolveCategoryId, resolvePayloadNote, upsertAssistantMessage]);
 
   useEffect(() => {
-    if (!user) {
+    if (!uid) {
       return;
     }
 
@@ -228,10 +229,10 @@ export function AiChatWidget() {
       unsubscribeDelta();
       unsubscribeComplete();
     };
-  }, [applyChatResponse, connectRealtimeIfAvailable, upsertAssistantMessage, user]);
+  }, [applyChatResponse, connectRealtimeIfAvailable, uid, upsertAssistantMessage]);
 
   useEffect(() => {
-    if (!isOpen || !user || historyLoadedForUid === user.uid) {
+    if (!isOpen || !uid || historyLoadedForUid === uid) {
       return;
     }
 
@@ -249,11 +250,11 @@ export function AiChatWidget() {
           createdAt: Date.parse(message.created_at),
         }));
         setMessages(hydratedMessages.length > 0 ? hydratedMessages : [INITIAL_ASSISTANT_MESSAGE]);
-        setHistoryLoadedForUid(user.uid);
+        setHistoryLoadedForUid(uid);
       } catch {
         if (!cancelled) {
           setMessages([INITIAL_ASSISTANT_MESSAGE]);
-          setHistoryLoadedForUid(user.uid);
+          setHistoryLoadedForUid(uid);
         }
       }
     })();
@@ -261,7 +262,7 @@ export function AiChatWidget() {
     return () => {
       cancelled = true;
     };
-  }, [formatAssistantContent, historyLoadedForUid, isOpen, user]);
+  }, [formatAssistantContent, historyLoadedForUid, isOpen, uid]);
 
   const handleSendMessage = async () => {
     const trimmedInput = input.trim();
@@ -326,11 +327,11 @@ export function AiChatWidget() {
   const submitDisabled = !input.trim() || isStreaming;
 
   const renderedMessages = useMemo(() => {
-    if (!user) {
+    if (!uid) {
       return [INITIAL_ASSISTANT_MESSAGE];
     }
-    return historyLoadedForUid === user.uid ? messages : [INITIAL_ASSISTANT_MESSAGE];
-  }, [historyLoadedForUid, messages, user]);
+    return historyLoadedForUid === uid ? messages : [INITIAL_ASSISTANT_MESSAGE];
+  }, [historyLoadedForUid, messages, uid]);
 
   return (
     <Sheet open={isOpen} onOpenChange={setIsOpen}>

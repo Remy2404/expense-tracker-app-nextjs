@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { Server } from 'socket.io';
 
 const port = Number(process.env.RELAY_PORT || process.env.PORT || 8090);
-const relaySecret = process.env.RELAY_SECRET || '';
+const relaySecret = process.env.RELAY_SECRET || process.env.REALTIME_RELAY_SECRET || '';
 const allowedOrigin = process.env.RELAY_ALLOWED_ORIGIN || '*';
 
 if (!relaySecret) {

@@ -14,9 +14,9 @@ type RealtimeEventMap = {
 type RealtimeEventName = keyof RealtimeEventMap;
 type RealtimeHandler<T extends RealtimeEventName> = (payload: RealtimeEventMap[T]) => void;
 
-const RECONNECT_BACKOFF_INITIAL_MS = 2_000;
-const RECONNECT_BACKOFF_MAX_MS = 30_000;
-const CONNECT_TIMEOUT_MS = 10_000;
+const RECONNECT_BACKOFF_INITIAL_MS = 5_000; 
+const RECONNECT_BACKOFF_MAX_MS = 120_000; 
+const CONNECT_TIMEOUT_MS = 20_000;
 
 class WebRealtimeClient {
   private socket: Socket | null = null;
@@ -36,6 +36,11 @@ class WebRealtimeClient {
     if (!uid) {
       this.disconnect();
       return;
+    }
+
+    if (this.reconnectTimerId !== null) {
+      clearTimeout(this.reconnectTimerId);
+      this.reconnectTimerId = null;
     }
 
     if (this.socket && this.activeUid === uid && this.socket.connected) {
@@ -133,11 +138,16 @@ class WebRealtimeClient {
       });
     });
 
-    // Reconnect on any disconnect: fetches a fresh session token each time,
-    // which handles expired credentials that would silently fail Socket.IO's
-    // built-in reconnection (which reuses the original stale token).
-    socket.on('disconnect', () => {
-      void this.connect();
+    // Reconnect only on unexpected disconnects.
+    socket.on('disconnect', (reason) => {
+      if (reason === 'io client disconnect') {
+        return;
+      }
+      this.scheduleReconnect();
+    });
+
+    socket.on('connect_error', () => {
+      this.scheduleReconnect();
     });
   }
 

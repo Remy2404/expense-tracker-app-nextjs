@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useSWRConfig } from 'swr';
 import { useAuth } from '@/contexts/AuthContext';
 import { webRealtimeClient } from '@/lib/realtime/client';
@@ -45,16 +45,22 @@ const shouldRevalidateKey = (key: unknown, entities?: string[]) => {
 export function RealtimeBootstrap() {
   const { user } = useAuth();
   const { mutate } = useSWRConfig();
+  const uid = user?.uid ?? null;
+  const mutateRef = useRef(mutate);
 
   useEffect(() => {
-    if (!user) {
+    mutateRef.current = mutate;
+  }, [mutate]);
+
+  useEffect(() => {
+    if (!uid) {
       webRealtimeClient.disconnect();
       return;
     }
 
     void webRealtimeClient.connect();
     const unsubscribe = webRealtimeClient.subscribe('sync.updated', (payload) => {
-      void mutate(
+      void mutateRef.current(
         (key) => shouldRevalidateKey(key, payload.entities),
         undefined,
         { revalidate: true }
@@ -63,14 +69,11 @@ export function RealtimeBootstrap() {
 
     return () => {
       unsubscribe();
-      webRealtimeClient.disconnect();
     };
-  }, [mutate, user]);
+  }, [uid]);
 
-  // Reconnect when the tab becomes visible again (e.g. after backgrounding or
-  // a backend restart). connect() is a no-op if the socket is already healthy.
   useEffect(() => {
-    if (!user) return;
+    if (!uid) return;
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
@@ -80,7 +83,7 @@ export function RealtimeBootstrap() {
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [user]);
+  }, [uid]);
 
   return null;
 }
