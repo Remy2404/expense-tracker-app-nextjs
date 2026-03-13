@@ -1,36 +1,86 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Expense Tracker Web App (Next.js)
 
-## Getting Started
+Web dashboard for the Expense Tracker platform, built with Next.js (App Router), React, Firebase Auth, and Supabase.
 
-First, run the development server:
+## Overview
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+This application provides:
+- Authentication (email/password + provider sign-in)
+- Expense, budget, goals, and analytics views
+- AI assistant integrations
+- Realtime updates support (Socket relay)
+- Responsive UI with modern component patterns
+
+## Tech Stack
+
+- Next.js 16 (App Router)
+- React 19 + TypeScript
+- Firebase (client auth)
+- Supabase (data layer)
+- SWR + Zustand
+- Tailwind CSS + Radix UI
+- Jest + Testing Library
+
+## Project Structure
+
+```text
+app/                # App Router pages and API routes
+components/         # Reusable UI and feature components
+hooks/              # Custom React hooks
+lib/                # Client libs, API helpers, utilities
+store/              # Zustand stores
+types/              # Shared TypeScript types
+scripts/            # Dev tooling (relay/dev orchestration)
+__tests__/          # Unit/integration tests
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Prerequisites
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- Node.js 20+
+- npm or pnpm
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Environment Setup
 
-## Learn More
+1. Copy `.env.example` to `.env.local`.
+2. Fill all required variables.
+3. Never commit `.env.local`.
 
-To learn more about Next.js, take a look at the following resources:
+## Run Locally
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Development (Next.js + relay helper): `npm run dev`
+- Next.js only: `npm run dev:next`
+- Relay only: `npm run dev:relay`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Default app URL: `http://localhost:3000`
 
-## Deploy on Vercel
+## Scripts
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- `npm run dev` - Start development stack
+- `npm run build` - Build production bundle
+- `npm run start` - Start production server
+- `npm run lint` - Run ESLint
+- `npm run test` - Run test suite
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Testing
+
+- Framework: Jest + Testing Library
+- Test files are under `__tests__/`
+- Run with: `npm run test`
+
+## Security
+
+- This app sets global security headers in `next.config.ts`.
+- Firebase web API key (`NEXT_PUBLIC_FIREBASE_API_KEY`) is public by design.
+- Protect data using strict Firebase/Supabase rules and least-privilege policies.
+- Keep all server-side secrets out of `NEXT_PUBLIC_*` variables.
+
+## Deployment
+
+Recommended deployment targets:
+- Vercel (web app)
+- Any Node.js-compatible platform
+
+Before deploy:
+1. Set all environment variables.
+2. Run lint and tests.
+3. Verify auth, API, and realtime flows.
