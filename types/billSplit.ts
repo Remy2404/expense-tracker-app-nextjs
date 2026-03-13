@@ -8,6 +8,7 @@ export interface BillSplitGroup {
   created_at: string;
   updated_at?: string;
   is_deleted?: boolean;
+  deleted_at?: string | null;
 }
 
 export interface BillSplitParticipant {
@@ -29,6 +30,7 @@ export interface BillSplitExpense {
   date: string;
   notes?: string | null;
   created_at: string;
+  updated_at?: string | null;
 }
 
 export interface BillSplitShare {
@@ -38,12 +40,13 @@ export interface BillSplitShare {
   amount: number;
   is_settled: boolean;
   settled_at?: string | null;
+  created_at?: string | null;
 }
 
 export interface BillSplitSettlement {
   id: string;
   group_id: string;
-  expense_id: string;
+  expense_id?: string | null;
   participant_id: string;
   amount: number;
   method: string;
