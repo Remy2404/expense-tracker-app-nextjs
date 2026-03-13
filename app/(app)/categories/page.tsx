@@ -42,10 +42,17 @@ export default function CategoriesPage() {
   };
 
   const handleDelete = async (id: string) => {
+    const category = categories.find((item) => item.id === id);
+    if (category?.is_default) {
+      alert('Default categories cannot be deleted.');
+      return;
+    }
+
     if (!window.confirm('Are you sure you want to delete this category?')) return;
     try {
       setDeletingId(id);
       await deleteCategory({ id });
+      await mutate();
     } catch (error) {
       console.error('Failed to delete category', error);
       alert('Failed to delete category.');
@@ -256,20 +263,22 @@ export default function CategoriesPage() {
                     >
                       <Edit2 size={16} />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDelete(category.id)}
-                      disabled={deletingId === category.id}
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                      title="Delete"
-                    >
-                      {deletingId === category.id ? (
-                        <Loader2 size={16} className="animate-spin" />
-                      ) : (
-                        <Trash2 size={16} />
-                      )}
-                    </Button>
+                    {category.is_default ? null : (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(category.id)}
+                        disabled={deletingId === category.id}
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                        title="Delete"
+                      >
+                        {deletingId === category.id ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          <Trash2 size={16} />
+                        )}
+                      </Button>
+                    )}
                   </div>
                 </div>
               );

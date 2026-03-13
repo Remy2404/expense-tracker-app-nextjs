@@ -87,7 +87,15 @@ const fetcher = async (table: string) => {
   const data = response.data;
 
   if (table === 'categories') {
-    return (data || []).map((category: CategoryWriteInput) => normalizeCategory(category));
+    const normalizedCategories = (data || [])
+      .map((category: CategoryWriteInput) => normalizeCategory(category))
+      .filter((category: Category) => !category.is_deleted);
+
+    const uniqueCategories = Array.from(
+      new Map(normalizedCategories.map((category) => [category.id, category])).values()
+    );
+
+    return uniqueCategories;
   }
   if (table === 'expenses') {
     return (data || []).map((expense: ExpenseWriteInput) => normalizeExpense(expense));
