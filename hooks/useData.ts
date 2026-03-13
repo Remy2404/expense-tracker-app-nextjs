@@ -92,7 +92,7 @@ const fetcher = async (table: string) => {
       .filter((category: Category) => !category.is_deleted);
 
     const uniqueCategories = Array.from(
-      new Map(normalizedCategories.map((category) => [category.id, category])).values()
+      new Map(normalizedCategories.map((category: { id: any; }) => [category.id, category])).values()
     );
 
     return uniqueCategories;
