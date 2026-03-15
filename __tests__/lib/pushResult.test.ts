@@ -33,6 +33,8 @@ describe('getSyncPushFailureMessage', () => {
       ],
     });
 
-    expect(message).toBe('Sync failed for 2 item(s): expense:exp-1, category:cat-1');
+    expect(message).toBe(
+      'Sync failed for 2 item(s): expense:exp-1 (Stale expense update), category:cat-1 (Invalid category reference)'
+    );
   });
 });

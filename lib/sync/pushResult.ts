@@ -10,7 +10,12 @@ export const getSyncPushFailureMessage = (response: SyncPushResponse): string | 
 
   const details = failedItems
     .slice(0, MAX_ITEMS_IN_MESSAGE)
-    .map((item) => `${item.entity_type}:${item.id}`)
+    .map((item) => {
+      const reason = typeof item.error === 'string' && item.error.trim().length > 0
+        ? ` (${item.error.trim()})`
+        : '';
+      return `${item.entity_type}:${item.id}${reason}`;
+    })
     .join(', ');
 
   const suffix = failedItems.length > MAX_ITEMS_IN_MESSAGE ? ', ...' : '';

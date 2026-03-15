@@ -122,4 +122,22 @@ describe("expenseSort (web)", () => {
       "older-update",
     ]);
   });
+
+  it("treats same UTC day as equal and falls back to audit timestamps", () => {
+    const mobileLike = {
+      id: "mobile-like",
+      date: "2026-03-15T17:00:00.000Z",
+      created_at: "2026-03-15T10:00:00.000Z",
+      updated_at: "2026-03-15T10:00:00.000Z",
+    };
+    const webLike = {
+      id: "web-like",
+      date: "2026-03-15T00:00:00.000Z",
+      created_at: "2026-03-15T10:05:00.000Z",
+      updated_at: "2026-03-15T10:05:00.000Z",
+    };
+
+    const result = sortExpensesByTransactionDateTime([mobileLike, webLike]);
+    expect(result.map((item) => item.id)).toEqual(["web-like", "mobile-like"]);
+  });
 });

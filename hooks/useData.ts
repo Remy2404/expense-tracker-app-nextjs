@@ -187,6 +187,22 @@ const fetchCategoryBudgetsByBudgetId = async (budgetId: string): Promise<SyncCat
   return budget.category_budgets || [];
 };
 
+const fetchBudgetByMonth = async (month: string): Promise<Budget | null> => {
+  if (!month) {
+    return null;
+  }
+
+  try {
+    const response = await aiHttpClient.get(`/api/budgets/month/${month}`);
+    return response.data as Budget;
+  } catch (error: any) {
+    if (error?.status === 404 || error?.response?.status === 404) {
+      return null;
+    }
+    throw error;
+  }
+};
+
 const fetchGoalTransactionsByGoalId = async (goalId: string): Promise<GoalTransaction[]> => {
   const response = await aiHttpClient.get(`/api/goals/${goalId}/transactions`);
   return response.data || [];
@@ -464,17 +480,22 @@ export function useAddBudget() {
   const { mutate } = useSWRConfig();
   return useSWRMutation('budgets', async (_key, { arg }: { arg: Omit<Budget, 'id' | 'created_at' | 'updated_at' | 'sync_status' | 'synced_at' | 'is_deleted'> }) => {
     const timestamp = nowIso();
+    const existingBudget = await fetchBudgetByMonth(arg.month);
     const budget: BudgetRecord = {
-      id: createUuid(),
+      ...(existingBudget ?? {}),
+      id: existingBudget?.id ?? createUuid(),
       ...arg,
-      created_at: timestamp,
+      created_at: existingBudget?.created_at ?? timestamp,
       updated_at: timestamp,
       is_deleted: false,
     };
     await pushSyncChange({ budgets: [toSyncBudgetItem(budget)] });
     await mutate('budgets');
     revalidateFinanceSummary(mutate);
-    return budget;
+    return {
+      budget,
+      action: existingBudget ? ('updated' as const) : ('created' as const),
+    };
   });
 }
 
@@ -532,18 +553,7 @@ export function useGoals() {
 }
 
 export function useBudgetByMonth(month: string) {
-  const fetcherByMonth = async () => {
-    if (!month) return null;
-    try {
-      const response = await aiHttpClient.get(`/api/budgets/month/${month}`);
-      return response.data as Budget;
-    } catch (error: any) {
-      if (error.response?.status === 404) {
-        return null;
-      }
-      throw error;
-    }
-  };
+  const fetcherByMonth = async () => fetchBudgetByMonth(month);
 
   const { data, error, isLoading, mutate } = useSWR(month ? ['budgets', month] : null, fetcherByMonth);
   return {

@@ -121,88 +121,83 @@ export default function DashboardPage() {
           onRetry={handleRetryDashboard}
         />
       ) : (
-        <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-12">
-          <section
-            className="xl:col-span-8"
-            aria-labelledby="dashboard-summary-heading"
-          >
-            <h2 id="dashboard-summary-heading" className="sr-only">
-              Monthly summary
-            </h2>
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              <DashboardStatCard
-                title="Income"
-                value={`+${getCurrencySymbol("USD")}${totalIncome.toFixed(2)}`}
-                subtitle="All time"
-                badgeLabel="Money in"
-                valueClassName="text-emerald-600"
-              />
-              <DashboardStatCard
-                title="Expenses"
-                value={`-${getCurrencySymbol("USD")}${totalExpense.toFixed(2)}`}
-                subtitle="All time"
-                badgeLabel="Money out"
-                valueClassName="text-destructive"
-              />
-              <DashboardStatCard
-                title="Balance"
-                value={`${totalBalance >= 0 ? "+" : "-"}${getCurrencySymbol("USD")}${Math.abs(totalBalance).toFixed(2)}`}
-                subtitle={totalBalance >= 0 ? "Net positive" : "Net negative"}
-                badgeLabel={
-                  transactionCount > 0
-                    ? `${transactionCount} transactions`
-                    : "No transactions"
-                }
-                valueClassName={
-                  totalBalance >= 0 ? "text-emerald-600" : "text-destructive"
-                }
-              />
-            </div>
-          </section>
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,24rem)]">
+            <section aria-labelledby="dashboard-summary-heading">
+              <h2 id="dashboard-summary-heading" className="sr-only">
+                Monthly summary
+              </h2>
+              <div className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
+                <DashboardStatCard
+                  title="Income"
+                  value={`+${getCurrencySymbol("USD")}${totalIncome.toFixed(2)}`}
+                  subtitle="All time"
+                  badgeLabel="Money in"
+                  valueClassName="text-emerald-600"
+                />
+                <DashboardStatCard
+                  title="Expenses"
+                  value={`-${getCurrencySymbol("USD")}${totalExpense.toFixed(2)}`}
+                  subtitle="All time"
+                  badgeLabel="Money out"
+                  valueClassName="text-destructive"
+                />
+                <DashboardStatCard
+                  title="Balance"
+                  value={`${totalBalance >= 0 ? "+" : "-"}${getCurrencySymbol("USD")}${Math.abs(totalBalance).toFixed(2)}`}
+                  subtitle={totalBalance >= 0 ? "Net positive" : "Net negative"}
+                  badgeLabel={
+                    transactionCount > 0
+                      ? `${transactionCount} transactions`
+                      : "No transactions"
+                  }
+                  valueClassName={
+                    totalBalance >= 0 ? "text-emerald-600" : "text-destructive"
+                  }
+                />
+              </div>
+            </section>
 
-          <section
-            className="xl:col-span-4"
-            aria-labelledby="dashboard-budget-health-heading"
-          >
-            <h2 id="dashboard-budget-health-heading" className="sr-only">
-              Budget health
-            </h2>
-            <BudgetHealthCard
-              hasCurrentBudget={hasCurrentBudget}
-              totalBudget={totalBudget}
-              totalSpent={currentMonthExpense}
-              remainingBudget={remainingBudget}
-            />
-          </section>
+            <section
+              className="xl:min-w-[20rem]"
+              aria-labelledby="dashboard-budget-health-heading"
+            >
+              <h2 id="dashboard-budget-health-heading" className="sr-only">
+                Budget health
+              </h2>
+              <BudgetHealthCard
+                hasCurrentBudget={hasCurrentBudget}
+                totalBudget={totalBudget}
+                totalSpent={currentMonthExpense}
+                remainingBudget={remainingBudget}
+              />
+            </section>
+          </div>
 
-          <section
-            className="xl:col-span-7"
-            aria-labelledby="dashboard-transactions-heading"
-          >
-            <h2 id="dashboard-transactions-heading" className="sr-only">
-              Recent transactions
-            </h2>
-            <RecentTransactionsCard
-              recentTransactions={recentTransactions}
-              categories={categories}
-              onAddExpense={() => setIsAddModalOpen(true)}
-            />
-          </section>
+          <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(18rem,1fr)]">
+            <section aria-labelledby="dashboard-transactions-heading">
+              <h2 id="dashboard-transactions-heading" className="sr-only">
+                Recent transactions
+              </h2>
+              <RecentTransactionsCard
+                recentTransactions={recentTransactions}
+                categories={categories}
+                onAddExpense={() => setIsAddModalOpen(true)}
+              />
+            </section>
 
-          <section
-            className="xl:col-span-5"
-            aria-labelledby="dashboard-ai-nudges-heading"
-          >
-            <h2 id="dashboard-ai-nudges-heading" className="sr-only">
-              AI nudges
-            </h2>
-            <AiNudgesCard
-              data={nudgesData}
-              isLoading={nudgesLoading}
-              isError={Boolean(nudgesError)}
-              onRetry={handleRetryNudges}
-            />
-          </section>
+            <section aria-labelledby="dashboard-ai-nudges-heading">
+              <h2 id="dashboard-ai-nudges-heading" className="sr-only">
+                AI nudges
+              </h2>
+              <AiNudgesCard
+                data={nudgesData}
+                isLoading={nudgesLoading}
+                isError={Boolean(nudgesError)}
+                onRetry={handleRetryNudges}
+              />
+            </section>
+          </div>
         </div>
       )}
 

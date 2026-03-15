@@ -60,7 +60,7 @@ describe("DashboardPage", () => {
       mutate: jest.fn(),
     });
     mockUseAiNudges.mockReturnValue({
-      data: { nudges: [] },
+      data: { nudges: [], generated_at: "2026-03-16T00:00:00Z" },
       isLoading: false,
       error: null,
       mutate: jest.fn(),
@@ -306,5 +306,28 @@ describe("DashboardPage", () => {
     expect(
       within(items[1]).getByText("Older transaction date"),
     ).toBeInTheDocument();
+  });
+
+  it("shows a neutral AI nudges unavailable state instead of a destructive error box", () => {
+    mockUseAiNudges.mockReturnValue({
+      data: { nudges: [], generated_at: "2026-03-16T00:00:00Z" },
+      isLoading: false,
+      error: new Error("nudges unavailable"),
+      mutate: jest.fn(),
+    });
+
+    render(<DashboardPage />);
+
+    expect(
+      screen.getByText("AI insights temporarily unavailable"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Recommendations are not ready right now. Try refreshing in a moment.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Unable to load AI nudges"),
+    ).not.toBeInTheDocument();
   });
 });

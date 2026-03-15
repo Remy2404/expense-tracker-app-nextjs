@@ -36,20 +36,30 @@ export function BudgetHealthCard({
         </div>
       </CardHeader>
       <CardContent className='space-y-4'>
-        <dl className='grid grid-cols-3 gap-3 text-sm'>
-          <div className='space-y-1'>
-            <dt className='text-muted-foreground'>Budgeted</dt>
-            <dd className='font-semibold'>{formatMoney(totalBudget, currencyCode)}</dd>
+        <dl className='grid grid-cols-3 gap-4 text-sm'>
+          <div className='min-w-0 space-y-2'>
+            <dt className='text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground'>
+              Budgeted
+            </dt>
+            <dd className='truncate text-base font-semibold tabular-nums'>
+              {formatMoney(totalBudget, currencyCode)}
+            </dd>
           </div>
-          <div className='space-y-1'>
-            <dt className='text-muted-foreground'>Spent</dt>
-            <dd className='font-semibold'>{formatMoney(totalSpent, currencyCode)}</dd>
+          <div className='min-w-0 space-y-2'>
+            <dt className='text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground'>
+              Spent
+            </dt>
+            <dd className='truncate text-base font-semibold tabular-nums'>
+              {formatMoney(totalSpent, currencyCode)}
+            </dd>
           </div>
-          <div className='space-y-1'>
-            <dt className='text-muted-foreground'>Remaining</dt>
+          <div className='min-w-0 space-y-2'>
+            <dt className='text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground'>
+              Remaining
+            </dt>
             <dd
               className={cn(
-                'font-semibold',
+                'truncate text-base font-semibold tabular-nums',
                 remainingBudget < 0 ? 'text-destructive' : 'text-emerald-600'
               )}
             >

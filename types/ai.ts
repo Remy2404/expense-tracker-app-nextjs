@@ -78,16 +78,40 @@ export interface AiChatHistoryItem {
   content: string;
 }
 
-export type AiChatIntent = 'none' | 'add_expense' | 'query_expenses';
+export type AiChatIntent =
+  | 'none'
+  | 'add_transaction'
+  | 'add_budget'
+  | 'add_goal'
+  | 'add_category'
+  | 'add_recurring_expense'
+  | 'query_expenses';
 
 export interface AiChatActionPayload {
+  kind: 'transaction' | 'budget' | 'goal' | 'category' | 'recurring_expense' | null;
+  type: 'expense' | 'income' | null;
   amount: number | null;
+  currency: string | null;
   category: string | null;
+  categoryType: 'expense' | 'income' | null;
   categoryId: string | null;
   note: string | null;
   noteSummary: string | null;
   date: string | null;
   merchant: string | null;
+  month?: string | null;
+  totalAmount?: number | null;
+  name?: string | null;
+  targetAmount?: number | null;
+  currentAmount?: number | null;
+  deadline?: string | null;
+  color?: string | null;
+  icon?: string | null;
+  frequency?: 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'yearly' | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  notificationEnabled?: boolean | null;
+  notificationDaysBefore?: number | null;
 }
 
 export interface AiChatExplainability {
@@ -111,6 +135,7 @@ export interface AiChatResponse {
   intent: AiChatIntent;
   silent_action: boolean;
   payload: AiChatActionPayload | null;
+  transactions?: AiChatActionPayload[] | null;
   explainability: AiChatExplainability | null;
   suggested_actions: AiChatSuggestedAction[];
   needs_confirmation: boolean;
@@ -219,19 +244,49 @@ export interface AiScenarioResult {
 
 export type NudgeSeverity = 'info' | 'warning' | 'critical';
 
+export type NudgeType =
+  | 'budget_exceeded'
+  | 'budget_nearly_reached'
+  | 'unusual_spending'
+  | 'recurring_subscription'
+  | 'savings_opportunity'
+  | 'income_change'
+  | 'category_overspending';
+
+export type NudgeActionType =
+  | 'edit_budget'
+  | 'view_transactions'
+  | 'reduce_spending'
+  | 'increase_budget'
+  | 'review_categories'
+  | 'create_recurring_expense'
+  | 'ignore_suggestion'
+  | 'create_savings_goal'
+  | 'allocate_to_savings'
+  | 'adjust_category_budget';
+
+export interface NudgeAction {
+  id: string;
+  label: string;
+  action: NudgeActionType;
+}
+
 export interface Nudge {
   id: string;
+  type: NudgeType;
   title: string;
   body: string;
   severity: NudgeSeverity;
   category?: string | null;
-  action_label?: string | null;
-  action_prompt?: string | null;
+  actions: NudgeAction[];
+  generated_at?: string | null;
 }
 
 export interface NudgesResponse {
   nudges: Nudge[];
   generated_at: string;
+  needs_confirmation?: boolean;
+  safety_warnings?: string[];
 }
 
 export interface NudgePreferences {

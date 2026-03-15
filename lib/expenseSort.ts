@@ -7,6 +7,13 @@ const toTimestamp = (value?: string | Date): number => {
   return Number.isFinite(timestamp) ? timestamp : 0;
 };
 
+const toUtcDayTimestamp = (value?: string | Date): number => {
+  if (!value) return 0;
+  const parsed = toSafeDate(value);
+  if (!Number.isFinite(parsed.getTime())) return 0;
+  return Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate());
+};
+
 export const compareExpensesByRecency = (
   left: Pick<Expense, "id" | "date" | "created_at" | "updated_at">,
   right: Pick<Expense, "id" | "date" | "created_at" | "updated_at">,
@@ -32,8 +39,9 @@ export const compareExpensesByTransactionDateTime = (
   left: Pick<Expense, "id" | "date" | "created_at" | "updated_at">,
   right: Pick<Expense, "id" | "date" | "created_at" | "updated_at">,
 ): number => {
-  // Dashboard "recent transactions" should follow transaction datetime first.
-  const dateDelta = toTimestamp(right.date) - toTimestamp(left.date);
+  // Compare by transaction calendar day (UTC-normalized) to avoid
+  // cross-platform timezone/time-of-day drift in date-only transaction input.
+  const dateDelta = toUtcDayTimestamp(right.date) - toUtcDayTimestamp(left.date);
   if (dateDelta !== 0) return dateDelta;
 
   // Then keep audit recency semantics for deterministic same-date ordering.

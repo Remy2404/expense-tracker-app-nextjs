@@ -81,6 +81,85 @@ const assertOptionalNullableString = (
   assertNullableString(payload, key, endpoint);
 };
 
+const assertOptionalNullableNumber = (
+  payload: UnknownRecord,
+  key: string,
+  endpoint: string
+): void => {
+  if (payload[key] === undefined) {
+    payload[key] = null;
+    return;
+  }
+  assertNullableNumber(payload, key, endpoint);
+};
+
+const assertOptionalNullableBoolean = (
+  payload: UnknownRecord,
+  key: string,
+  endpoint: string
+): void => {
+  if (payload[key] === undefined) {
+    payload[key] = null;
+    return;
+  }
+  if (payload[key] !== null && typeof payload[key] !== 'boolean') {
+    throw new Error(`Invalid ${endpoint} response: "${key}" must be a boolean or null.`);
+  }
+};
+
+const normalizeActionPayloadKeys = (rawPayload: unknown): unknown => {
+  if (!rawPayload || typeof rawPayload !== 'object') {
+    return rawPayload;
+  }
+
+  const payload = rawPayload as UnknownRecord;
+  return {
+    ...payload,
+    categoryType: payload.categoryType ?? payload.category_type ?? null,
+    categoryId: payload.categoryId ?? payload.category_id ?? null,
+    noteSummary: payload.noteSummary ?? payload.note_summary ?? null,
+    totalAmount: payload.totalAmount ?? payload.total_amount ?? null,
+    targetAmount: payload.targetAmount ?? payload.target_amount ?? null,
+    currentAmount: payload.currentAmount ?? payload.current_amount ?? null,
+    startDate: payload.startDate ?? payload.start_date ?? null,
+    endDate: payload.endDate ?? payload.end_date ?? null,
+    notificationEnabled: payload.notificationEnabled ?? payload.notification_enabled ?? null,
+    notificationDaysBefore:
+      payload.notificationDaysBefore ?? payload.notification_days_before ?? null,
+  };
+};
+
+const assertNullableActionPayload = (rawPayload: unknown, endpoint: string): void => {
+  if (rawPayload === null || rawPayload === undefined) {
+    return;
+  }
+  const actionPayload = assertObject(normalizeActionPayloadKeys(rawPayload), endpoint);
+  assertOptionalNullableString(actionPayload, 'kind', endpoint);
+  assertOptionalNullableString(actionPayload, 'type', endpoint);
+  assertNullableNumber(actionPayload, 'amount', endpoint);
+  assertOptionalNullableString(actionPayload, 'currency', endpoint);
+  assertNullableString(actionPayload, 'category', endpoint);
+  assertOptionalNullableString(actionPayload, 'categoryType', endpoint);
+  assertOptionalNullableString(actionPayload, 'categoryId', endpoint);
+  assertNullableString(actionPayload, 'note', endpoint);
+  assertOptionalNullableString(actionPayload, 'noteSummary', endpoint);
+  assertNullableString(actionPayload, 'date', endpoint);
+  assertOptionalNullableString(actionPayload, 'merchant', endpoint);
+  assertOptionalNullableString(actionPayload, 'month', endpoint);
+  assertOptionalNullableNumber(actionPayload, 'totalAmount', endpoint);
+  assertOptionalNullableString(actionPayload, 'name', endpoint);
+  assertOptionalNullableNumber(actionPayload, 'targetAmount', endpoint);
+  assertOptionalNullableNumber(actionPayload, 'currentAmount', endpoint);
+  assertOptionalNullableString(actionPayload, 'deadline', endpoint);
+  assertOptionalNullableString(actionPayload, 'color', endpoint);
+  assertOptionalNullableString(actionPayload, 'icon', endpoint);
+  assertOptionalNullableString(actionPayload, 'frequency', endpoint);
+  assertOptionalNullableString(actionPayload, 'startDate', endpoint);
+  assertOptionalNullableString(actionPayload, 'endDate', endpoint);
+  assertOptionalNullableBoolean(actionPayload, 'notificationEnabled', endpoint);
+  assertOptionalNullableNumber(actionPayload, 'notificationDaysBefore', endpoint);
+};
+
 const assertSuggestedActions = (payload: UnknownRecord, endpoint: string): void => {
   const rawActions = payload.suggested_actions;
   if (rawActions === undefined) {
@@ -122,6 +201,25 @@ const assertExplainability = (payload: UnknownRecord, endpoint: string): void =>
   }
 
   assertOptionalNullableString(explainabilityPayload, 'correction_tip', endpoint);
+};
+
+const assertNudgeActions = (payload: UnknownRecord, endpoint: string): void => {
+  const rawActions = payload.actions;
+  if (rawActions === undefined) {
+    payload.actions = [];
+    return;
+  }
+
+  if (!Array.isArray(rawActions)) {
+    throw new Error(`Invalid ${endpoint} response: "actions" must be an array.`);
+  }
+
+  rawActions.forEach((item) => {
+    const actionPayload = assertObject(item, endpoint);
+    assertString(actionPayload, 'id', endpoint);
+    assertString(actionPayload, 'label', endpoint);
+    assertString(actionPayload, 'action', endpoint);
+  });
 };
 
 const validateParse = (data: unknown): AiParseResponse => {
@@ -169,16 +267,18 @@ const validateChat = (data: unknown): AiChatResponse => {
   assertExplainability(payload, '/api/ai/chat');
   assertSuggestedActions(payload, '/api/ai/chat');
 
-  const rawPayload = payload.payload;
-  if (rawPayload !== null) {
-    const actionPayload = assertObject(rawPayload, '/api/ai/chat');
-    assertNullableNumber(actionPayload, 'amount', '/api/ai/chat');
-    assertNullableString(actionPayload, 'category', '/api/ai/chat');
-    assertOptionalNullableString(actionPayload, 'categoryId', '/api/ai/chat');
-    assertNullableString(actionPayload, 'note', '/api/ai/chat');
-    assertOptionalNullableString(actionPayload, 'note_summary', '/api/ai/chat');
-    assertNullableString(actionPayload, 'date', '/api/ai/chat');
-    assertOptionalNullableString(actionPayload, 'merchant', '/api/ai/chat');
+  assertNullableActionPayload(payload.payload, '/api/ai/chat');
+  payload.payload = normalizeActionPayloadKeys(payload.payload);
+
+  const rawTransactions = payload.transactions;
+  if (rawTransactions !== undefined && rawTransactions !== null) {
+    if (!Array.isArray(rawTransactions)) {
+      throw new Error('Invalid /api/ai/chat response: "transactions" must be an array.');
+    }
+    payload.transactions = rawTransactions.map((transaction) => {
+      assertNullableActionPayload(transaction, '/api/ai/chat');
+      return normalizeActionPayloadKeys(transaction);
+    }) as AiChatResponse['transactions'];
   }
 
   const confidences = payload.field_confidences;
@@ -317,6 +417,14 @@ export const aiApi = {
     }
   },
 
+  async clearChatHistory(): Promise<void> {
+    try {
+      await aiHttpClient.delete('/api/ai/chat/history');
+    } catch (error) {
+      throw normalizeAiApiError(error);
+    }
+  },
+
   async getRealtimeSession(): Promise<RealtimeSessionResponse> {
     try {
       const response = await aiHttpClient.get('/api/realtime/session');
@@ -355,9 +463,13 @@ export const aiApi = {
       (payload.nudges as unknown[]).forEach((item) => {
         const nudge = assertObject(item, '/api/ai/nudges');
         assertString(nudge, 'id', '/api/ai/nudges');
+        assertString(nudge, 'type', '/api/ai/nudges');
         assertString(nudge, 'title', '/api/ai/nudges');
         assertString(nudge, 'body', '/api/ai/nudges');
         assertString(nudge, 'severity', '/api/ai/nudges');
+        assertNudgeActions(nudge, '/api/ai/nudges');
+        assertOptionalNullableString(nudge, 'category', '/api/ai/nudges');
+        assertOptionalNullableString(nudge, 'generated_at', '/api/ai/nudges');
       });
       return payload as unknown as NudgesResponse;
     } catch (error) {

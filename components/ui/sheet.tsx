@@ -31,10 +31,11 @@ const sheetVariants: Record<'top' | 'bottom' | 'left' | 'right', string> = {
 
 interface SheetContentProps extends React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> {
   side?: 'top' | 'bottom' | 'left' | 'right';
+  hideClose?: boolean;
 }
 
 const SheetContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.Content>, SheetContentProps>(
-  ({ side = 'right', className, children, ...props }, ref) => (
+  ({ side = 'right', hideClose = false, className, children, ...props }, ref) => (
     <SheetPortal>
       <SheetOverlay />
       <DialogPrimitive.Content
@@ -48,10 +49,12 @@ const SheetContent = React.forwardRef<React.ElementRef<typeof DialogPrimitive.Co
         {...props}
       >
         {children}
-        <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 hover:opacity-100">
-          <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
-        </DialogPrimitive.Close>
+        {!hideClose ? (
+          <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 hover:opacity-100">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </DialogPrimitive.Close>
+        ) : null}
       </DialogPrimitive.Content>
     </SheetPortal>
   )

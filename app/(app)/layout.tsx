@@ -11,10 +11,14 @@ export default function AppLayout({
 }>) {
   return (
     <ProtectedRoute>
-      <AppShell>{children}</AppShell>
+      <div className="flex min-h-dvh bg-background">
+        <div className="min-w-0 flex-1">
+          <AppShell>{children}</AppShell>
+        </div>
+        <AiChatWidget />
+      </div>
       <NotificationsBootstrap />
       <RealtimeBootstrap />
-      <AiChatWidget />
     </ProtectedRoute>
   );
 }
