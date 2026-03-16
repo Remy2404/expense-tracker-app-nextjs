@@ -9,17 +9,22 @@ interface BudgetModalProps {
   isOpen: boolean;
   onClose: () => void;
   editingBudget: Budget | null;
+  initialDraft?: {
+    month?: string;
+    totalAmount?: string;
+  } | null;
 }
 
-export function BudgetModal({ isOpen, onClose, editingBudget }: BudgetModalProps) {
+export function BudgetModal({ isOpen, onClose, editingBudget, initialDraft }: BudgetModalProps) {
   const { trigger: addBudget, isMutating: isAdding } = useAddBudget();
   const { trigger: editBudget, isMutating: isEditing } = useEditBudget();
 
   const isSaving = isAdding || isEditing;
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const initialMonth = editingBudget?.month || currentMonth;
-  const initialTotalAmount = editingBudget ? editingBudget.total_amount.toString() : '';
+  const initialMonth = editingBudget?.month || initialDraft?.month || currentMonth;
+  const initialTotalAmount =
+    editingBudget?.total_amount?.toString() || initialDraft?.totalAmount || '';
 
   const { register, handleSubmit } = useForm<{ month: string; totalAmount: string }>({
     values: {

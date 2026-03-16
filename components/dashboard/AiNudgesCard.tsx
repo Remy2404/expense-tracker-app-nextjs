@@ -30,6 +30,62 @@ const getNudgeLabel = (severity: Nudge['severity']) => {
   return 'Info';
 };
 
+const extractMoneyValues = (content: string): number[] =>
+  [...content.matchAll(/\$([0-9]+(?:\.[0-9]{1,2})?)/g)].map((match) => Number(match[1]));
+
+const extractRecurringMerchant = (content: string): string | null => {
+  const merchantMatch = content.match(/to\s+([^.,]+?)(?:\s+was detected|[.,]|$)/i);
+  return merchantMatch?.[1]?.trim() || null;
+};
+
+const startOfToday = () => new Date().toISOString().split('T')[0];
+
+const futureDate = (monthsAhead: number) => {
+  const date = new Date();
+  date.setMonth(date.getMonth() + monthsAhead);
+  return date.toISOString().split('T')[0];
+};
+
+const buildBudgetCreateUrl = (nudge: Nudge) => {
+  const amounts = extractMoneyValues(nudge.body);
+  const params = new URLSearchParams({ create: 'budget' });
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  params.set('month', currentMonth);
+  if (amounts.length >= 2) {
+    params.set('totalAmount', amounts[1].toFixed(2));
+  }
+  return `/budgets?${params.toString()}`;
+};
+
+const buildGoalCreateUrl = (nudge: Nudge) => {
+  const amounts = extractMoneyValues(nudge.body);
+  const params = new URLSearchParams({ create: 'goal' });
+  params.set('name', nudge.category ? `${nudge.category} Savings` : 'Savings Goal');
+  params.set('targetAmount', String(amounts[0] && amounts[0] > 0 ? amounts[0] : 250));
+  params.set('currentAmount', '0');
+  params.set('deadline', futureDate(3));
+  params.set('icon', 'target');
+  params.set('color', '#10B981');
+  return `/goals?${params.toString()}`;
+};
+
+const buildRecurringCreateUrl = (nudge: Nudge) => {
+  const amounts = extractMoneyValues(nudge.body);
+  const merchant = extractRecurringMerchant(nudge.body) ?? nudge.category ?? '';
+  const params = new URLSearchParams({ create: 'recurring' });
+  if (amounts[0]) {
+    params.set('amount', amounts[0].toFixed(2));
+  }
+  if (merchant) {
+    params.set('notes', merchant);
+  }
+  params.set('frequency', 'monthly');
+  params.set('startDate', startOfToday());
+  params.set('notificationEnabled', 'true');
+  params.set('notificationDaysBefore', '1');
+  return `/recurring?${params.toString()}`;
+};
+
 export function AiNudgesCard({ data, isLoading, isError, onRetry }: AiNudgesCardProps) {
   const router = useRouter();
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
@@ -55,7 +111,7 @@ export function AiNudgesCard({ data, isLoading, isError, onRetry }: AiNudgesCard
       case 'edit_budget':
       case 'increase_budget':
       case 'adjust_category_budget':
-        router.push('/budgets');
+        router.push(buildBudgetCreateUrl(nudge));
         return;
       case 'view_transactions':
         router.push('/expenses');
@@ -64,11 +120,11 @@ export function AiNudgesCard({ data, isLoading, isError, onRetry }: AiNudgesCard
         router.push('/categories');
         return;
       case 'create_recurring_expense':
-        router.push('/recurring');
+        router.push(buildRecurringCreateUrl(nudge));
         return;
       case 'create_savings_goal':
       case 'allocate_to_savings':
-        router.push('/goals');
+        router.push(buildGoalCreateUrl(nudge));
         return;
       case 'reduce_spending':
         router.push('/analytics');

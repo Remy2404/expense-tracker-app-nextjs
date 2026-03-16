@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Plus, RefreshCw, Pause, Play, Edit2, Trash2, Loader2, Calendar, Bell } from 'lucide-react';
 import { format, isBefore, isSameDay, startOfDay } from 'date-fns';
 import { RecurringExpense, RecurringFrequency } from '@/types';
@@ -28,6 +29,9 @@ const frequencyLabels: Record<RecurringFrequency, string> = {
 };
 
 export default function RecurringExpensesPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { recurringExpenses, isLoading } = useRecurringExpenses();
   const { categories } = useCategories();
   const { trigger: deleteRecurring } = useDeleteRecurringExpense();
@@ -36,6 +40,30 @@ export default function RecurringExpensesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<RecurringExpense | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const recurringDraft = useMemo(() => {
+    if (searchParams.get('create') !== 'recurring') {
+      return null;
+    }
+    return {
+      amount: searchParams.get('amount') || undefined,
+      categoryId: searchParams.get('categoryId') || undefined,
+      frequency: (searchParams.get('frequency') as RecurringFrequency | null) || 'monthly',
+      startDate: searchParams.get('startDate') || new Date().toISOString().split('T')[0],
+      endDate: searchParams.get('endDate') || undefined,
+      notes: searchParams.get('notes') || undefined,
+      notificationEnabled: searchParams.get('notificationEnabled') !== 'false',
+      notificationDaysBefore: searchParams.get('notificationDaysBefore') || '1',
+    };
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!recurringDraft) {
+      return;
+    }
+    setEditingItem(null);
+    setIsModalOpen(true);
+  }, [recurringDraft]);
 
   const activeRecurring = useMemo(
     () => recurringExpenses.filter((item) => item.is_active),
@@ -64,6 +92,13 @@ export default function RecurringExpensesPage() {
   const handleOpenCreate = () => {
     setEditingItem(null);
     setIsModalOpen(true);
+  };
+
+  const clearRecurringDraftQuery = () => {
+    if (!recurringDraft) {
+      return;
+    }
+    router.replace(pathname);
   };
 
   const handleEdit = (item: RecurringExpense) => {
@@ -336,9 +371,11 @@ export default function RecurringExpensesPage() {
         onClose={() => {
           setIsModalOpen(false);
           setEditingItem(null);
+          clearRecurringDraftQuery();
         }}
         editingItem={editingItem}
         categories={categories}
+        initialDraft={recurringDraft}
       />
     </div>
   );

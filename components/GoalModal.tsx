@@ -97,9 +97,17 @@ interface GoalModalProps {
   onSubmit: (data: GoalFormData) => Promise<void>;
   isSaving: boolean;
   goalToEdit?: Goal | null;
+  initialDraft?: Partial<GoalFormData> | null;
 }
 
-export function GoalModal({ isOpen, onClose, onSubmit, isSaving, goalToEdit }: GoalModalProps) {
+export function GoalModal({
+  isOpen,
+  onClose,
+  onSubmit,
+  isSaving,
+  goalToEdit,
+  initialDraft,
+}: GoalModalProps) {
   const isEditMode = !!goalToEdit;
   const [iconSearch, setIconSearch] = useState('');
 
@@ -161,15 +169,15 @@ export function GoalModal({ isOpen, onClose, onSubmit, isSaving, goalToEdit }: G
     }
 
     reset({
-      name: '',
-      target_amount: 0,
-      current_amount: 0,
-      deadline: new Date().toISOString().split('T')[0],
-      color: '#10B981',
-      icon: 'target',
-      is_archived: false,
+      name: initialDraft?.name ?? '',
+      target_amount: initialDraft?.target_amount ?? 0,
+      current_amount: initialDraft?.current_amount ?? 0,
+      deadline: initialDraft?.deadline ?? new Date().toISOString().split('T')[0],
+      color: initialDraft?.color ?? '#10B981',
+      icon: initialDraft?.icon ?? 'target',
+      is_archived: initialDraft?.is_archived ?? false,
     });
-  }, [isOpen, goalToEdit, reset]);
+  }, [initialDraft, isOpen, goalToEdit, reset]);
 
   const handleColorSelect = (color: string) => {
     setValue('color', color);

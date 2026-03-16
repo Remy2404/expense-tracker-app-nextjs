@@ -1,7 +1,8 @@
 'use client';
 
-import { useMemo, useState, type CSSProperties, type ComponentType, type MouseEvent } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties, type ComponentType, type MouseEvent } from 'react';
 import Link from 'next/link';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   Plus,
   Target,
@@ -88,6 +89,9 @@ function formatMoney(value: number) {
 }
 
 export default function GoalsPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { goals, isLoading, isError, mutate } = useGoals();
   const { trigger: addGoal, isMutating: isAdding } = useAddGoal();
   const { trigger: editGoal, isMutating: isEditing } = useEditGoal();
@@ -97,7 +101,30 @@ export default function GoalsPage() {
   const [goalToEdit, setGoalToEdit] = useState<Goal | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  const goalDraft = useMemo(() => {
+    if (searchParams.get('create') !== 'goal') {
+      return null;
+    }
+    return {
+      name: searchParams.get('name') || '',
+      target_amount: Number(searchParams.get('targetAmount') || '0') || 0,
+      current_amount: Number(searchParams.get('currentAmount') || '0') || 0,
+      deadline: searchParams.get('deadline') || new Date().toISOString().split('T')[0],
+      color: searchParams.get('color') || '#10B981',
+      icon: searchParams.get('icon') || 'target',
+      is_archived: false,
+    };
+  }, [searchParams]);
+
   const isSaving = isAdding || isEditing;
+
+  useEffect(() => {
+    if (!goalDraft) {
+      return;
+    }
+    setGoalToEdit(null);
+    setIsModalOpen(true);
+  }, [goalDraft]);
 
   const sortedGoals = useMemo(
     () =>
@@ -112,6 +139,13 @@ export default function GoalsPage() {
   const handleOpenCreate = () => {
     setGoalToEdit(null);
     setIsModalOpen(true);
+  };
+
+  const clearGoalDraftQuery = () => {
+    if (!goalDraft) {
+      return;
+    }
+    router.replace(pathname);
   };
 
   const handleEdit = (goal: Goal) => {
@@ -155,6 +189,7 @@ export default function GoalsPage() {
 
       setIsModalOpen(false);
       setGoalToEdit(null);
+      clearGoalDraftQuery();
     } catch (error) {
       console.error('Failed to save goal', error);
       alert(goalToEdit ? 'Failed to update goal.' : 'Failed to create goal.');
@@ -331,10 +366,12 @@ export default function GoalsPage() {
         onClose={() => {
           setIsModalOpen(false);
           setGoalToEdit(null);
+          clearGoalDraftQuery();
         }}
         onSubmit={handleSubmit}
         isSaving={isSaving}
         goalToEdit={goalToEdit}
+        initialDraft={goalDraft}
       />
     </div>
   );

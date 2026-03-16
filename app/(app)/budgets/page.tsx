@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Plus, Edit2, Trash2, Loader2, TrendingUp, TrendingDown } from 'lucide-react';
 import { format } from 'date-fns';
 import { Budget } from '@/types';
@@ -21,6 +22,9 @@ const normalizeMonthKey = (value: string) => {
 };
 
 export default function BudgetsPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { budgets, isLoading: isLoadingBudgets } = useBudgets();
   const { expenses, isLoading: isLoadingExpenses } = useExpenses();
   const { trigger: deleteBudget } = useDeleteBudget();
@@ -29,7 +33,25 @@ export default function BudgetsPage() {
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  const budgetDraft = useMemo(() => {
+    if (searchParams.get('create') !== 'budget') {
+      return null;
+    }
+    return {
+      month: searchParams.get('month') || undefined,
+      totalAmount: searchParams.get('totalAmount') || undefined,
+    };
+  }, [searchParams]);
+
   const isLoading = isLoadingBudgets || isLoadingExpenses;
+
+  useEffect(() => {
+    if (!budgetDraft) {
+      return;
+    }
+    setEditingBudget(null);
+    setIsModalOpen(true);
+  }, [budgetDraft]);
 
   const spendingByMonth = useMemo(() => {
     const spending: Record<string, number> = {};
@@ -111,6 +133,13 @@ export default function BudgetsPage() {
   const handleOpenCreate = () => {
     setEditingBudget(null);
     setIsModalOpen(true);
+  };
+
+  const clearBudgetDraftQuery = () => {
+    if (!budgetDraft) {
+      return;
+    }
+    router.replace(pathname);
   };
 
   const handleEdit = (budget: Budget) => {
@@ -335,8 +364,10 @@ export default function BudgetsPage() {
         onClose={() => {
           setIsModalOpen(false);
           setEditingBudget(null);
+          clearBudgetDraftQuery();
         }}
         editingBudget={editingBudget}
+        initialDraft={budgetDraft}
       />
     </div>
   );

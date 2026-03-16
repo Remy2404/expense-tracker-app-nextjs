@@ -10,6 +10,16 @@ interface RecurringExpenseModalProps {
   onClose: () => void;
   editingItem: RecurringExpense | null;
   categories: Category[];
+  initialDraft?: {
+    amount?: string;
+    categoryId?: string;
+    frequency?: RecurringFrequency;
+    startDate?: string;
+    endDate?: string;
+    notes?: string;
+    notificationEnabled?: boolean;
+    notificationDaysBefore?: string;
+  } | null;
 }
 
 const frequencyOptions: { value: RecurringFrequency; label: string }[] = [
@@ -28,7 +38,13 @@ const notificationDaysOptions = [
   { value: 7, label: '1 week before' },
 ];
 
-export function RecurringExpenseModal({ isOpen, onClose, editingItem, categories }: RecurringExpenseModalProps) {
+export function RecurringExpenseModal({
+  isOpen,
+  onClose,
+  editingItem,
+  categories,
+  initialDraft,
+}: RecurringExpenseModalProps) {
   const { trigger: addRecurring, isMutating: isAdding } = useAddRecurringExpense();
   const { trigger: editRecurring, isMutating: isEditing } = useEditRecurringExpense();
 
@@ -48,14 +64,22 @@ export function RecurringExpenseModal({ isOpen, onClose, editingItem, categories
 
   const { register, handleSubmit, setValue, control } = useForm<RecurringForm>({
     values: {
-      amount: editingItem ? editingItem.amount.toString() : '',
-      categoryId: editingItem ? editingItem.category_id : categories[0]?.id || '',
-      frequency: editingItem ? editingItem.frequency : 'monthly',
-      startDate: editingItem ? new Date(editingItem.start_date).toISOString().split('T')[0] : nowDate,
-      endDate: editingItem?.end_date ? new Date(editingItem.end_date).toISOString().split('T')[0] : '',
-      notes: editingItem?.notes || '',
-      notificationEnabled: editingItem ? editingItem.notification_enabled : true,
-      notificationDaysBefore: String(editingItem ? editingItem.notification_days_before : 1),
+      amount: editingItem ? editingItem.amount.toString() : initialDraft?.amount || '',
+      categoryId: editingItem ? editingItem.category_id : initialDraft?.categoryId || categories[0]?.id || '',
+      frequency: editingItem ? editingItem.frequency : initialDraft?.frequency || 'monthly',
+      startDate: editingItem
+        ? new Date(editingItem.start_date).toISOString().split('T')[0]
+        : initialDraft?.startDate || nowDate,
+      endDate: editingItem?.end_date
+        ? new Date(editingItem.end_date).toISOString().split('T')[0]
+        : initialDraft?.endDate || '',
+      notes: editingItem?.notes || initialDraft?.notes || '',
+      notificationEnabled: editingItem
+        ? editingItem.notification_enabled
+        : initialDraft?.notificationEnabled ?? true,
+      notificationDaysBefore: String(
+        editingItem ? editingItem.notification_days_before : initialDraft?.notificationDaysBefore ?? 1
+      ),
     },
   });
 
