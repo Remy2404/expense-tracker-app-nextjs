@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { browserLocalPersistence, getAuth, Auth, inMemoryPersistence, setPersistence } from 'firebase/auth';
+import { getAuth, Auth, inMemoryPersistence, setPersistence } from 'firebase/auth';
 
 const requiredFirebaseEnvVars = {
   NEXT_PUBLIC_FIREBASE_API_KEY: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -28,10 +28,9 @@ const firebaseConfig = {
   messagingSenderId: requiredFirebaseEnvVars.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: requiredFirebaseEnvVars.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
-
 const app: FirebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const auth: Auth = getAuth(app);
-const persistence = typeof window === 'undefined' ? inMemoryPersistence : browserLocalPersistence;
+const persistence = inMemoryPersistence;
 
 export const authPersistenceReady = setPersistence(auth, persistence).catch((error) => {
   console.error('Failed to set auth persistence:', error);

@@ -28,7 +28,15 @@ const normalizeSessionPayload = (payload: Record<string, unknown>): AuthSessionP
 
 export const authApi = {
   async createSession(idToken: string): Promise<AuthSessionPayload> {
-    const response = await aiHttpClient.post('/api/auth/session', { id_token: idToken });
+    const response = await aiHttpClient.post(
+      '/api/auth/session',
+      { id_token: idToken },
+      {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      }
+    );
     return normalizeSessionPayload((response.data ?? {}) as Record<string, unknown>);
   },
 
