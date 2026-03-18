@@ -1,4 +1,4 @@
-import axios, { AxiosError, AxiosHeaders } from 'axios';
+import axios, { AxiosError, AxiosHeaders, InternalAxiosRequestConfig } from 'axios';
 import { AiApiError } from '@/types/ai';
 
 const DEFAULT_TIMEOUT_MS = 20_000;
@@ -58,6 +58,43 @@ const ensureCsrfToken = async (): Promise<string | null> => {
   return csrfBootstrapPromise;
 };
 
+const resolveRequestUrl = (config: InternalAxiosRequestConfig): URL | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const base = config.baseURL ?? apiBaseUrl;
+    return new URL(config.url ?? '', new URL(base, window.location.origin));
+  } catch {
+    return null;
+  }
+};
+
+const isCrossOriginRequest = (config: InternalAxiosRequestConfig): boolean => {
+  const requestUrl = resolveRequestUrl(config);
+  return requestUrl !== null && requestUrl.origin !== window.location.origin;
+};
+
+const attachBearerToken = async (config: InternalAxiosRequestConfig): Promise<void> => {
+  const { auth } = await import('@/lib/firebase');
+  const firebaseUser = auth.currentUser;
+  if (!firebaseUser) {
+    return;
+  }
+
+  const idToken = await firebaseUser.getIdToken();
+  if (!idToken) {
+    return;
+  }
+
+  const headers = AxiosHeaders.from(config.headers);
+  if (!headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${idToken}`);
+  }
+  config.headers = headers;
+};
+
 const toAiApiError = (error: unknown): AiApiError => {
   if (axios.isAxiosError(error)) {
     const axiosError = error as AxiosError<{ detail?: string; message?: string }>;
@@ -91,6 +128,22 @@ aiHttpClient.interceptors.request.use(async (config) => {
     return config;
   }
 
+  const headers = AxiosHeaders.from(config.headers);
+  if (headers.has('Authorization')) {
+    config.headers = headers;
+    return config;
+  }
+
+  if (isCrossOriginRequest(config)) {
+    try {
+      await attachBearerToken(config);
+    } catch {
+      // Ignore bearer fallback failures and let the backend return 401 when needed.
+    }
+
+    return config;
+  }
+
   const method = config.method?.toLowerCase();
   if (!method || !MUTATING_METHODS.has(method)) {
     return config;
@@ -101,7 +154,6 @@ aiHttpClient.interceptors.request.use(async (config) => {
     return config;
   }
 
-  const headers = AxiosHeaders.from(config.headers);
   headers.set(CSRF_HEADER_NAME, csrfToken);
   config.headers = headers;
   return config;
