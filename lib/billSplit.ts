@@ -1,4 +1,58 @@
-import { BillSplitExpense, BillSplitParticipant, BillSplitShare, ComputedParticipantBalance } from '@/types/billSplit';
+import {
+  BillSplitExpense,
+  BillSplitParticipant,
+  BillSplitShare,
+  ComputedParticipantBalance,
+  GroupSummary,
+} from '@/types/billSplit';
+
+type BillSplitRecord = Record<string, unknown>;
+
+const asRecord = (value: unknown): BillSplitRecord =>
+  value && typeof value === 'object' ? (value as BillSplitRecord) : {};
+
+export const toFiniteNumber = (value: unknown): number => {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  return 0;
+};
+
+export const normalizeGroupSummary = (value: unknown): GroupSummary => {
+  const record = asRecord(value);
+
+  return {
+    id: String(record.id ?? ''),
+    name: String(record.name ?? 'Untitled Group'),
+    currency: String(record.currency ?? 'USD'),
+    created_by: String(record.created_by ?? record.createdBy ?? ''),
+    created_at: String(record.created_at ?? record.createdAt ?? ''),
+    updated_at:
+      typeof record.updated_at === 'string'
+        ? record.updated_at
+        : typeof record.updatedAt === 'string'
+          ? record.updatedAt
+          : undefined,
+    is_deleted:
+      typeof record.is_deleted === 'boolean'
+        ? record.is_deleted
+        : typeof record.isDeleted === 'boolean'
+          ? record.isDeleted
+          : false,
+    participantsCount: toFiniteNumber(record.participantsCount ?? record.participants_count),
+    expensesCount: toFiniteNumber(record.expensesCount ?? record.expenses_count),
+    unsettledSharesCount: toFiniteNumber(
+      record.unsettledSharesCount ?? record.unsettled_shares_count
+    ),
+    totalExpenses: toFiniteNumber(record.totalExpenses ?? record.total_expenses),
+  };
+};
 
 export const buildEqualShares = (
   amount: number,
@@ -59,9 +113,9 @@ export const computeParticipantBalances = (
   }));
 };
 
-export const currencyFormat = (value: number, currency = 'USD') =>
+export const currencyFormat = (value: number | string | null | undefined, currency = 'USD') =>
   new Intl.NumberFormat(undefined, {
     style: 'currency',
     currency,
     minimumFractionDigits: 2,
-  }).format(value);
+  }).format(toFiniteNumber(value));

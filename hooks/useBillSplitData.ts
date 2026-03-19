@@ -4,6 +4,7 @@ import { useSWRConfig } from 'swr';
 import { useAuth } from '@/contexts/AuthContext';
 import { GroupDetailsPayload, GroupSummary } from '@/types/billSplit';
 import { aiHttpClient } from '@/lib/api/http';
+import { normalizeGroupSummary } from '@/lib/billSplit';
 
 const KEY_GROUPS = 'bill-split-groups';
 
@@ -13,7 +14,7 @@ export function useBillSplitGroups() {
   const fetcher = async (): Promise<GroupSummary[]> => {
     if (!user?.uid) return [];
     const response = await aiHttpClient.get('/api/bill-splits/groups');
-    return response.data;
+    return Array.isArray(response.data) ? response.data.map(normalizeGroupSummary) : [];
   };
 
   const { data, error, isLoading, mutate } = useSWR(user?.uid ? KEY_GROUPS : null, fetcher);

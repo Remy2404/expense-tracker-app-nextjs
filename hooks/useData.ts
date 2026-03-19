@@ -675,24 +675,29 @@ export function useDeleteGoal() {
 
 export function useAddGoalTransaction() {
   const { mutate } = useSWRConfig();
-  return useSWRMutation('goal_transactions', async (_key, { arg }: { arg: Omit<GoalTransaction, 'id'> }) => {
+  return useSWRMutation('goal_transactions', async (_key, { arg }: { arg: Omit<GoalTransaction, 'id'> & { new_balance: number } }) => {
     const existingGoal = await fetchSingle<Goal>('savings_goals', arg.goal_id);
     const existingTransactions = await fetchGoalTransactionsByGoalId(arg.goal_id);
     const transaction: GoalTransaction = {
       id: createUuid(),
-      ...arg,
+      goal_id: arg.goal_id,
+      amount: arg.amount,
+      type: arg.type,
+      date: arg.date,
+      note: arg.note,
     };
+
+    // Update goal with new balance and add transaction in single sync
+    const updatedGoal: Goal = {
+      ...existingGoal,
+      current_amount: arg.new_balance,
+      updated_at: nowIso(),
+    };
+
     await pushSyncChange({
-      goals: [
-        toSyncGoalItem(
-          {
-            ...existingGoal,
-            updated_at: nowIso(),
-          },
-          [...existingTransactions, transaction]
-        ),
-      ],
+      goals: [toSyncGoalItem(updatedGoal, [...existingTransactions, transaction])],
     });
+
     await mutate('savings_goals');
     await mutate(['goal_transactions', arg.goal_id]);
     return transaction;

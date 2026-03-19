@@ -9,14 +9,21 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { UserAvatar } from '@/components/ui/user-avatar';
+import { useSettingsPreferencesStore } from '@/store/settingsPreferencesStore';
 
 export default function SettingsPage() {
   const { user, signOutUser, linkGoogleProvider, isGoogleLinked } = useAuth();
   const router = useRouter();
   const { theme, setTheme, resolvedTheme } = useTheme();
+  const {
+    dailyReminder,
+    reminderTime,
+    hasHydrated: reminderPreferencesHydrated,
+    setDailyReminder,
+    setReminderTime,
+  } = useSettingsPreferencesStore();
 
-  const [dailyReminder, setDailyReminder] = useState(false);
-  const [reminderTime, setReminderTime] = useState('09:00');
   const [isLoading, setIsLoading] = useState(false);
   const [isLinkingGoogle, setIsLinkingGoogle] = useState(false);
   const [authFeedback, setAuthFeedback] = useState('');
@@ -91,13 +98,18 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-              <span className="text-xl font-semibold text-primary">
-                {user?.email?.charAt(0).toUpperCase() || 'U'}
-              </span>
-            </div>
-            <div className="space-y-1">
-              <p className="font-medium">{user?.email || 'Guest'}</p>
+            <UserAvatar
+              photoURL={user?.photoURL}
+              displayName={user?.displayName}
+              email={user?.email}
+              className="h-16 w-16"
+              fallbackClassName="text-xl font-semibold"
+            />
+            <div className="min-w-0 space-y-1">
+              <p className="font-medium break-all">{user?.displayName || user?.email || 'Guest'}</p>
+              {user?.displayName && user?.email ? (
+                <p className="text-sm text-foreground/60 break-all">{user.email}</p>
+              ) : null}
               <Badge variant="outline">{user ? authMethod : 'Not signed in'}</Badge>
             </div>
           </div>
@@ -196,7 +208,11 @@ export default function SettingsPage() {
             <Bell size={20} />
             Notifications
           </CardTitle>
-          <CardDescription>Configure your reminder preferences.</CardDescription>
+          <CardDescription>
+            {reminderPreferencesHydrated
+              ? 'Configure your reminder preferences.'
+              : 'Loading your saved reminder preferences.'}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
@@ -209,9 +225,10 @@ export default function SettingsPage() {
               role="switch"
               aria-checked={dailyReminder}
               aria-label="Toggle daily reminder"
+              disabled={!reminderPreferencesHydrated}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 dailyReminder ? 'bg-primary' : 'bg-muted'
-              }`}
+              } ${!reminderPreferencesHydrated ? 'cursor-not-allowed opacity-60' : ''}`}
             >
               <span
                 className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
@@ -229,6 +246,7 @@ export default function SettingsPage() {
                 type="time"
                 value={reminderTime}
                 onChange={(e) => setReminderTime(e.target.value)}
+                disabled={!reminderPreferencesHydrated}
                 className="mt-1 w-full h-10 px-3 border border-border rounded-lg bg-transparent"
               />
             </div>

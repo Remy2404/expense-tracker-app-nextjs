@@ -48,6 +48,11 @@ export default function BillSplitPage() {
     [groups]
   );
 
+  const totalUnsettledShares = useMemo(
+    () => groups.reduce((sum, group) => sum + group.unsettledSharesCount, 0),
+    [groups]
+  );
+
   const onCreateGroup = async (data: GroupFormData) => {
     const participantNames = data.participants
       .split(',')
@@ -109,9 +114,7 @@ export default function BillSplitPage() {
             <CardDescription>Unsettled Shares</CardDescription>
           </CardHeader>
           <CardContent className="p-4 pt-0">
-            <p className="text-2xl font-bold">
-              {groups.reduce((sum, group) => sum + group.unsettledSharesCount, 0)}
-            </p>
+            <p className="text-2xl font-bold">{totalUnsettledShares}</p>
           </CardContent>
         </Card>
       </div>

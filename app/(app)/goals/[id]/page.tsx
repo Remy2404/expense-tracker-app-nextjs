@@ -69,19 +69,14 @@ export default function GoalDetailPage() {
         newAmount = Math.max(0, newAmount - amount);
       }
 
-      // Save the transaction record to database
+      // Add transaction and update balance in a single sync operation
       await addTransaction({
         goal_id: goalId,
         amount,
         type,
         date: new Date().toISOString(),
         note,
-      });
-
-      // Update goal balance
-      await updateBalance({
-        id: goalId,
-        current_amount: newAmount,
+        new_balance: newAmount,
       });
 
       setIsTransactionModalOpen(false);
