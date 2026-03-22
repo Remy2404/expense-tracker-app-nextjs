@@ -5,38 +5,46 @@ import { useSWRConfig } from 'swr';
 import { useAuth } from '@/contexts/AuthContext';
 import { webRealtimeClient } from '@/lib/realtime/client';
 
+const hasRelevantEntity = (entities: string[] | undefined, relevantEntities: string[]) => {
+  if (entities == null || entities.length === 0) {
+    return true;
+  }
+
+  const entitySet = new Set(entities);
+  return relevantEntities.some((entity) => entitySet.has(entity));
+};
+
 const shouldRevalidateKey = (key: unknown, entities?: string[]) => {
   if (typeof key === 'string') {
-    const entitySet = new Set(entities ?? []);
     if (key === '/api/ai/nudges') {
-      return true;
+      return hasRelevantEntity(entities, ['expenses', 'categories', 'budgets', 'goals', 'recurring']);
     }
     if (key === 'dashboard-summary') {
-      return true;
+      return hasRelevantEntity(entities, ['expenses']);
     }
     if (key === 'expenses') {
-      return entities == null || entitySet.size === 0 || entitySet.has('expenses');
+      return hasRelevantEntity(entities, ['expenses']);
     }
     if (key === 'categories') {
-      return entities == null || entitySet.size === 0 || entitySet.has('categories');
+      return hasRelevantEntity(entities, ['categories']);
     }
     if (key === 'budgets') {
-      return entities == null || entitySet.size === 0 || entitySet.has('budgets');
+      return hasRelevantEntity(entities, ['budgets']);
     }
     if (key === 'savings_goals') {
-      return entities == null || entitySet.size === 0 || entitySet.has('goals');
+      return hasRelevantEntity(entities, ['goals']);
     }
     if (key === 'recurring_expenses') {
-      return entities == null || entitySet.size === 0 || entitySet.has('recurring');
+      return hasRelevantEntity(entities, ['recurring']);
     }
     return false;
   }
 
   if (Array.isArray(key) && key[0] === 'finance-summary') {
-    return true;
+    return hasRelevantEntity(entities, ['expenses']);
   }
   if (Array.isArray(key) && key[0] === 'budget-summary') {
-    return true;
+    return hasRelevantEntity(entities, ['expenses', 'budgets']);
   }
 
   return false;
@@ -63,7 +71,7 @@ export function RealtimeBootstrap() {
       void mutateRef.current(
         (key) => shouldRevalidateKey(key, payload.entities),
         undefined,
-        { revalidate: true }
+        { revalidate: true, populateCache: false }
       );
     });
 

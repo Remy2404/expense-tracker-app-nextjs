@@ -381,7 +381,7 @@ export function useDashboardSummary() {
   const { data, error, isLoading, mutate } = useSWR<DashboardSummaryResponse>(
     user ? 'dashboard-summary' : null,
     () => dashboardApi.getSummary(),
-    { revalidateOnFocus: true, refreshInterval: 30_000 },
+    { revalidateOnFocus: true },
   );
 
   return {
@@ -397,7 +397,7 @@ export function useBudgetSummary(month: string) {
   const { data, error, isLoading, mutate } = useSWR<BudgetSummaryResponse>(
     user && month ? ['budget-summary', month] : null,
     () => budgetApi.getSummary(month),
-    { revalidateOnFocus: true, refreshInterval: 30_000 },
+    { revalidateOnFocus: true },
   );
 
   return {
