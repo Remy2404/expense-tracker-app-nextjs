@@ -80,6 +80,7 @@ const createMessageId = (role: 'user' | 'assistant') =>
   `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
 const getStreamingMessageId = (requestId: string) => `assistant-stream-${requestId}`;
+const getMirroredUserMessageId = (requestId: string) => `user-stream-${requestId}`;
 
 const parseNumberedQuickReplies = (content: string): string[] => {
   const matches = [...content.matchAll(/(?:^|\n)\s*\d+\.\s+([^\n]+)/g)]
@@ -99,6 +100,48 @@ const getChatActionErrorMessage = (error: unknown): string => {
     }
   }
   return "I couldn't complete that request right now.";
+};
+
+const buildMirroredAssistantContent = (response: AiChatResponse): string => {
+  const answer = response.answer.trim();
+  if (answer) {
+    return answer;
+  }
+
+  const payload = response.payload;
+  switch (response.intent) {
+    case 'add_transaction':
+      if (response.transactions && response.transactions.length > 1) {
+        return `Logged ${response.transactions.length} transactions from your message.`;
+      }
+      if (typeof payload?.amount === 'number') {
+        const actionLabel = payload.type === 'income' ? 'income' : 'expense';
+        return `Added ${actionLabel}: **$${payload.amount.toFixed(2)}**`;
+      }
+      return '';
+    case 'add_budget':
+      if (payload?.month && typeof payload.totalAmount === 'number') {
+        return `Created budget: **$${payload.totalAmount.toFixed(2)}** for ${payload.month}.`;
+      }
+      return '';
+    case 'add_goal':
+      if (payload?.name && typeof payload.targetAmount === 'number') {
+        return `Created goal: **${payload.name}** with target **$${payload.targetAmount.toFixed(2)}**.`;
+      }
+      return '';
+    case 'add_category':
+      if (payload?.name) {
+        return `Created category: **${payload.name}**.`;
+      }
+      return '';
+    case 'add_recurring_expense':
+      if (typeof payload?.amount === 'number' && payload.frequency) {
+        return `Created recurring expense: **$${payload.amount.toFixed(2)}** ${payload.frequency}.`;
+      }
+      return '';
+    default:
+      return '';
+  }
 };
 
 export function AiChatWidget() {
@@ -298,6 +341,47 @@ export function AiChatWidget() {
     [formatAssistantContent]
   );
 
+  const upsertUserMessage = useCallback((content: string, requestId?: string) => {
+    const trimmedContent = content.trim();
+    if (!trimmedContent) {
+      return;
+    }
+
+    setMessages((currentMessages) => {
+      const messageId = requestId ? getMirroredUserMessageId(requestId) : null;
+      if (messageId) {
+        const existingIndex = currentMessages.findIndex((message) => message.id === messageId);
+        if (existingIndex >= 0) {
+          return currentMessages;
+        }
+      }
+
+      return [
+        ...currentMessages,
+        {
+          id: messageId ?? createMessageId('user'),
+          role: 'user',
+          content: trimmedContent,
+          createdAt: Date.now(),
+        },
+      ];
+    });
+  }, []);
+
+  const applyMirroredChatResponse = useCallback(
+    (response: AiChatResponse, requestId?: string) => {
+      const assistantContent = buildMirroredAssistantContent(response);
+      if (assistantContent) {
+        upsertAssistantMessage(assistantContent, requestId);
+      }
+      setSuggestedActions(response.suggested_actions ?? []);
+      if (requestId) {
+        completedRequestIdsRef.current.add(requestId);
+      }
+    },
+    [upsertAssistantMessage]
+  );
+
   const applyChatResponse = useCallback(
     async (response: AiChatResponse, requestId?: string) => {
       let assistantContent = formatAssistantContent(response.answer || '');
@@ -481,8 +565,16 @@ export function AiChatWidget() {
     }
 
     void connectRealtimeIfAvailable();
+    const unsubscribeUser = webRealtimeClient.subscribe('ai.chat.user', (payload) => {
+      if (pendingRequestIdsRef.current.has(payload.requestId)) {
+        return;
+      }
+      upsertUserMessage(payload.message, payload.requestId);
+    });
+
     const unsubscribeDelta = webRealtimeClient.subscribe('ai.chat.delta', (payload) => {
       if (!pendingRequestIdsRef.current.has(payload.requestId)) {
+        upsertAssistantMessage(payload.delta, payload.requestId);
         return;
       }
       streamedRequestIdsRef.current.add(payload.requestId);
@@ -491,16 +583,25 @@ export function AiChatWidget() {
 
     const unsubscribeComplete = webRealtimeClient.subscribe('ai.chat.complete', (payload) => {
       if (!pendingRequestIdsRef.current.has(payload.requestId)) {
+        applyMirroredChatResponse(payload.response as unknown as AiChatResponse, payload.requestId);
         return;
       }
       void applyChatResponse(payload.response as unknown as AiChatResponse, payload.requestId);
     });
 
     return () => {
+      unsubscribeUser();
       unsubscribeDelta();
       unsubscribeComplete();
     };
-  }, [applyChatResponse, connectRealtimeIfAvailable, uid, upsertAssistantMessage]);
+  }, [
+    applyChatResponse,
+    applyMirroredChatResponse,
+    connectRealtimeIfAvailable,
+    uid,
+    upsertAssistantMessage,
+    upsertUserMessage,
+  ]);
 
   useEffect(() => {
     if (!isOpen || !uid || historyLoadedForUid === uid) {

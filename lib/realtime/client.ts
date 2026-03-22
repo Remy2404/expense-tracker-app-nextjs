@@ -5,6 +5,7 @@ import { auth } from '@/lib/firebase';
 import { io, Socket } from 'socket.io-client';
 
 type RealtimeEventMap = {
+  'ai.chat.user': { requestId: string; message: string };
   'ai.chat.start': { requestId: string };
   'ai.chat.delta': { requestId: string; delta: string };
   'ai.chat.complete': { requestId: string; response: Record<string, unknown> };
@@ -124,6 +125,7 @@ class WebRealtimeClient {
 
   private bindSocket(socket: Socket): void {
     const events: RealtimeEventName[] = [
+      'ai.chat.user',
       'ai.chat.start',
       'ai.chat.delta',
       'ai.chat.complete',

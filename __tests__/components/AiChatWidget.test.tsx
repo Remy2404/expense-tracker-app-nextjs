@@ -7,13 +7,30 @@ const streamChatMock = jest.fn();
 const getChatHistoryMock = jest.fn();
 const connectMock = jest.fn();
 const disconnectMock = jest.fn();
-const subscribeMock = jest.fn(() => jest.fn());
+const realtimeSubscribers = new Map<string, Set<(payload: unknown) => void>>();
+const subscribeMock = jest.fn((eventName: string, handler: (payload: unknown) => void) => {
+  const handlers = realtimeSubscribers.get(eventName) ?? new Set<(payload: unknown) => void>();
+  handlers.add(handler);
+  realtimeSubscribers.set(eventName, handlers);
+
+  return () => {
+    const currentHandlers = realtimeSubscribers.get(eventName);
+    currentHandlers?.delete(handler);
+    if (currentHandlers && currentHandlers.size === 0) {
+      realtimeSubscribers.delete(eventName);
+    }
+  };
+});
 const addExpenseTrigger = jest.fn();
 const addBudgetTrigger = jest.fn();
 const addGoalTrigger = jest.fn();
 const addCategoryTrigger = jest.fn();
 const addRecurringExpenseTrigger = jest.fn();
 const mutateMock = jest.fn();
+
+const emitRealtimeEvent = (eventName: string, payload: unknown) => {
+  realtimeSubscribers.get(eventName)?.forEach((handler) => handler(payload));
+};
 
 jest.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({
@@ -78,6 +95,7 @@ jest.mock('@/components/ui/sheet', () => ({
 describe('AiChatWidget', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    realtimeSubscribers.clear();
     getChatHistoryMock.mockResolvedValue({ messages: [] });
     connectMock.mockResolvedValue(undefined);
     addBudgetTrigger.mockResolvedValue({ action: 'created', budget: { id: 'budget-1' } });
@@ -278,5 +296,66 @@ describe('AiChatWidget', () => {
         currency: 'USD',
       });
     });
+  });
+
+  it('mirrors remote chat events without replaying silent actions locally', async () => {
+    const user = userEvent.setup();
+
+    render(<AiChatWidget />);
+    await user.click(screen.getByRole('button', { name: /open ai assistant/i }));
+
+    await waitFor(() => {
+      expect(getChatHistoryMock).toHaveBeenCalledWith(40);
+    });
+
+    emitRealtimeEvent('ai.chat.user', {
+      requestId: 'remote-request-1',
+      message: 'Create a budget of 900 for April',
+    });
+    emitRealtimeEvent('ai.chat.delta', {
+      requestId: 'remote-request-1',
+      delta: 'Created budget: **$900.00**',
+    });
+    emitRealtimeEvent('ai.chat.complete', {
+      requestId: 'remote-request-1',
+      response: {
+        answer: '',
+        query_used: 'action_intent_router',
+        data_points: 8,
+        confidence: 0.92,
+        intent: 'add_budget',
+        silent_action: true,
+        payload: {
+          kind: 'budget',
+          type: null,
+          amount: null,
+          currency: null,
+          category: null,
+          categoryType: null,
+          categoryId: null,
+          note: null,
+          noteSummary: null,
+          date: null,
+          merchant: null,
+          month: '2026-04',
+          totalAmount: 900,
+        },
+        explainability: null,
+        suggested_actions: [],
+        needs_confirmation: false,
+        safety_warnings: [],
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Create a budget of 900 for April')).toBeInTheDocument();
+      expect(screen.getByText(/Created budget:/i)).toBeInTheDocument();
+    });
+
+    expect(addBudgetTrigger).not.toHaveBeenCalled();
+    expect(addExpenseTrigger).not.toHaveBeenCalled();
+    expect(addGoalTrigger).not.toHaveBeenCalled();
+    expect(addCategoryTrigger).not.toHaveBeenCalled();
+    expect(addRecurringExpenseTrigger).not.toHaveBeenCalled();
   });
 });
