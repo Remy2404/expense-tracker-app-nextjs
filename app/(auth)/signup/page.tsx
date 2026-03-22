@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Wallet, Loader2 } from 'lucide-react';
@@ -12,8 +12,22 @@ export default function SignupPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signInWithGoogle, signUpWithEmail } = useAuth();
+  const { user, isLoading, signInWithGoogle, signUpWithEmail } = useAuth();
   const router = useRouter();
+
+  useEffect(() => {
+    if (user) {
+      router.replace('/dashboard');
+    }
+  }, [user, router]);
+
+  if (isLoading || user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="animate-spin h-8 w-8" />
+      </div>
+    );
+  }
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,7 +53,7 @@ export default function SignupPage() {
         setError(result.error || 'Failed to create an account.');
         return;
       }
-      router.push('/dashboard');
+      router.replace('/dashboard');
     } finally {
       setLoading(false);
     }
@@ -52,7 +66,7 @@ export default function SignupPage() {
     try {
       const result = await signInWithGoogle();
       if (result.success) {
-        router.push('/dashboard');
+        router.replace('/dashboard');
         return;
       }
 

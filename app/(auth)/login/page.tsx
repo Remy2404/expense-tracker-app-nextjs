@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Wallet, Loader2 } from 'lucide-react';
@@ -11,8 +11,22 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signInWithEmail, signInWithGoogle } = useAuth();
+  const { user, isLoading, signInWithEmail, signInWithGoogle } = useAuth();
   const router = useRouter();
+
+  useEffect(() => {
+    if (user) {
+      router.replace('/dashboard');
+    }
+  }, [user, router]);
+
+  if (isLoading || user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="animate-spin h-8 w-8" />
+      </div>
+    );
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,7 +45,7 @@ export default function LoginPage() {
         setError(result.error || 'Failed to sign in. Please check your credentials.');
         return;
       }
-      router.push('/dashboard');
+      router.replace('/dashboard');
     } finally {
       setLoading(false);
     }
@@ -44,7 +58,7 @@ export default function LoginPage() {
     try {
       const result = await signInWithGoogle();
       if (result.success) {
-        router.push('/dashboard');
+        router.replace('/dashboard');
         return;
       }
 
