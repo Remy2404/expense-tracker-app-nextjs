@@ -6,8 +6,16 @@ import { useParams } from 'next/navigation';
 import { Plus, Target, Edit2, Trash2, Loader2, ArrowLeft, TrendingUp, TrendingDown, Wallet } from 'lucide-react';
 import { GoalModal } from '@/components/GoalModal';
 import { GoalTransactionModal } from '@/components/GoalTransactionModal';
-import { useGoals, useDeleteGoal, useEditGoal, useUpdateGoalBalance, useGoalTransactions, useAddGoalTransaction } from '@/hooks/useData';
+import { useGoals, useDeleteGoal, useEditGoal, useGoalTransactions, useAddGoalTransaction } from '@/hooks/useData';
 import { currencyFormat } from '@/lib/billSplit';
+import {
+  getGoalBalanceAfterTransaction,
+  getGoalProgress,
+  getGoalRemaining,
+  isGoalAchieved,
+  normalizeGoalAmount,
+  type GoalTransactionType,
+} from '@/lib/goals';
 import { format, isBefore, startOfDay } from 'date-fns';
 
 export default function GoalDetailPage() {
@@ -17,26 +25,29 @@ export default function GoalDetailPage() {
   const { goals, isLoading } = useGoals();
   const { trigger: deleteGoal } = useDeleteGoal();
   const { trigger: editGoal, isMutating: isEditing } = useEditGoal();
-  const { trigger: updateBalance, isMutating: isUpdating } = useUpdateGoalBalance();
   const { trigger: addTransaction, isMutating: isAddingTransaction } = useAddGoalTransaction();
   const { transactions, isLoading: isLoadingTransactions } = useGoalTransactions(goalId);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
+  const [transactionType, setTransactionType] = useState<GoalTransactionType>('deposit');
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const goal = useMemo(() => goals.find(g => g.id === goalId), [goals, goalId]);
 
-  const isSaving = isEditing || isUpdating || isAddingTransaction;
+  const safeCurrentAmount = normalizeGoalAmount(goal?.current_amount);
+  const safeTargetAmount = normalizeGoalAmount(goal?.target_amount);
+  const remainingAmount = getGoalRemaining(goal?.current_amount, goal?.target_amount);
+
+  const isSaving = isEditing || isAddingTransaction;
 
   const progress = useMemo(() => {
-    if (!goal || goal.target_amount <= 0) return 0;
-    return Math.min((goal.current_amount / goal.target_amount) * 100, 100);
-  }, [goal]);
+    return getGoalProgress(goal?.current_amount, goal?.target_amount);
+  }, [goal?.current_amount, goal?.target_amount]);
 
   const isAchieved = useMemo(() => {
-    return goal ? goal.current_amount >= goal.target_amount : false;
-  }, [goal]);
+    return isGoalAchieved(goal?.current_amount, goal?.target_amount);
+  }, [goal?.current_amount, goal?.target_amount]);
 
   const isOverdue = useMemo(() => {
     if (!goal) return false;
@@ -57,19 +68,22 @@ export default function GoalDetailPage() {
     }
   };
 
-  const handleTransaction = async (amount: number, type: 'deposit' | 'withdraw', note?: string) => {
+  const openTransactionModal = (type: GoalTransactionType) => {
+    setTransactionType(type);
+    setIsTransactionModalOpen(true);
+  };
+
+  const handleTransaction = async (amount: number, type: GoalTransactionType, note?: string) => {
     if (!goal) return;
 
-    try {
-      // Calculate new balance
-      let newAmount = goal.current_amount;
-      if (type === 'deposit') {
-        newAmount += amount;
-      } else {
-        newAmount = Math.max(0, newAmount - amount);
-      }
+    if (type === 'withdraw' && amount > safeCurrentAmount) {
+      alert('Cannot withdraw more than current balance');
+      return;
+    }
 
-      // Add transaction and update balance in a single sync operation
+    try {
+      const newAmount = getGoalBalanceAfterTransaction(safeCurrentAmount, amount, type);
+
       await addTransaction({
         goal_id: goalId,
         amount,
@@ -80,9 +94,17 @@ export default function GoalDetailPage() {
       });
 
       setIsTransactionModalOpen(false);
+
+      if (type === 'deposit' && safeTargetAmount > 0 && newAmount >= safeTargetAmount) {
+        alert('Congratulations! You have reached your savings goal!');
+      }
     } catch (error) {
       console.error('Failed to process transaction', error);
-      alert('Failed to process transaction.');
+      const message =
+        error instanceof Error && error.message.trim().length > 0
+          ? error.message
+          : 'Failed to process transaction.';
+      alert(message);
     }
   };
 
@@ -192,11 +214,11 @@ export default function GoalDetailPage() {
         <div className="flex justify-between items-end mb-4">
           <div>
             <p className="text-sm text-foreground/60">Current</p>
-            <p className="text-3xl font-bold">{currencyFormat(goal.current_amount, 'USD')}</p>
+            <p className="text-3xl font-bold">{currencyFormat(safeCurrentAmount, 'USD')}</p>
           </div>
           <div className="text-right">
             <p className="text-sm text-foreground/60">Target</p>
-            <p className="text-2xl font-semibold">{currencyFormat(goal.target_amount, 'USD')}</p>
+            <p className="text-2xl font-semibold">{currencyFormat(safeTargetAmount, 'USD')}</p>
           </div>
         </div>
 
@@ -213,21 +235,21 @@ export default function GoalDetailPage() {
 
         <div className="flex justify-between text-sm text-foreground/60">
           <span>{progress.toFixed(0)}% complete</span>
-          <span>{currencyFormat(goal.target_amount - goal.current_amount, 'USD')} remaining</span>
+          <span>{currencyFormat(remainingAmount, 'USD')} remaining</span>
         </div>
       </div>
 
       {/* Actions */}
       <div className="grid grid-cols-2 gap-4">
         <button
-          onClick={() => setIsTransactionModalOpen(true)}
+          onClick={() => openTransactionModal('deposit')}
           className="flex items-center justify-center gap-2 bg-primary text-primary-foreground px-4 py-3 rounded-xl font-medium hover:opacity-90 transition-opacity"
         >
           <Plus size={20} />
           Add Money
         </button>
         <button
-          onClick={() => setIsTransactionModalOpen(true)}
+          onClick={() => openTransactionModal('withdraw')}
           className="flex items-center justify-center gap-2 border border-border px-4 py-3 rounded-xl font-medium hover:bg-muted transition-colors"
         >
           <Wallet size={20} />
@@ -290,7 +312,8 @@ export default function GoalDetailPage() {
         onClose={() => setIsTransactionModalOpen(false)}
         onSubmit={handleTransaction}
         isSaving={isSaving}
-        currentBalance={goal.current_amount}
+        currentBalance={safeCurrentAmount}
+        defaultType={transactionType}
       />
     </div>
   );

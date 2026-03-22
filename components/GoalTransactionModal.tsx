@@ -1,20 +1,43 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Loader2, TrendingUp, TrendingDown } from 'lucide-react';
+import type { GoalTransactionType } from '@/lib/goals';
 
 interface GoalTransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (amount: number, type: 'deposit' | 'withdraw', note?: string) => Promise<void>;
+  onSubmit: (amount: number, type: GoalTransactionType, note?: string) => Promise<void>;
   isSaving: boolean;
   currentBalance: number;
+  defaultType: GoalTransactionType;
 }
 
-export function GoalTransactionModal({ isOpen, onClose, onSubmit, isSaving, currentBalance }: GoalTransactionModalProps) {
-  const [type, setType] = useState<'deposit' | 'withdraw'>('deposit');
+export function GoalTransactionModal({
+  isOpen,
+  onClose,
+  onSubmit,
+  isSaving,
+  currentBalance,
+  defaultType,
+}: GoalTransactionModalProps) {
+  const [type, setType] = useState<GoalTransactionType>(defaultType);
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    setType(defaultType);
+    setAmount('');
+    setNote('');
+  }, [defaultType, isOpen]);
+
+  const titleId = 'goal-transaction-modal-title';
+  const amountInputId = 'goal-transaction-amount';
+  const noteInputId = 'goal-transaction-note';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,17 +53,19 @@ export function GoalTransactionModal({ isOpen, onClose, onSubmit, isSaving, curr
     }
 
     await onSubmit(parseFloat(amount), type, note || undefined);
-    setAmount('');
-    setNote('');
-    setType('deposit');
   };
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 p-4 flex items-center justify-center">
-      <div className="w-full max-w-lg bg-background border border-border rounded-xl shadow-lg p-6 space-y-4">
-        <h3 className="text-xl font-semibold">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="w-full max-w-lg bg-background border border-border rounded-xl shadow-lg p-6 space-y-4"
+      >
+        <h3 id={titleId} className="text-xl font-semibold">
           {type === 'deposit' ? 'Add Money to Goal' : 'Withdraw from Goal'}
         </h3>
 
@@ -74,8 +99,9 @@ export function GoalTransactionModal({ isOpen, onClose, onSubmit, isSaving, curr
           </div>
 
           <div>
-            <label className="text-sm font-medium">Amount *</label>
+            <label htmlFor={amountInputId} className="text-sm font-medium">Amount *</label>
             <input
+              id={amountInputId}
               type="number"
               step="0.01"
               min="0"
@@ -93,8 +119,9 @@ export function GoalTransactionModal({ isOpen, onClose, onSubmit, isSaving, curr
           </div>
 
           <div>
-            <label className="text-sm font-medium">Note (optional)</label>
+            <label htmlFor={noteInputId} className="text-sm font-medium">Note (optional)</label>
             <input
+              id={noteInputId}
               type="text"
               value={note}
               onChange={(e) => setNote(e.target.value)}

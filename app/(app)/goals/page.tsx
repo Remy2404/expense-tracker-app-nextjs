@@ -43,6 +43,7 @@ import { GoalModal } from '@/components/GoalModal';
 import { EmptyState } from '@/components/state/EmptyState';
 import { ErrorState } from '@/components/state/ErrorState';
 import { useAddGoal, useDeleteGoal, useEditGoal, useGoals } from '@/hooks/useData';
+import { getGoalProgress, normalizeGoalAmount } from '@/lib/goals';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -273,10 +274,9 @@ export default function GoalsPage() {
         ) : (
           <div className="divide-y divide-border">
             {sortedGoals.map((goal) => {
-              const progress =
-                goal.target_amount > 0
-                  ? Math.min((goal.current_amount / goal.target_amount) * 100, 100)
-                  : 0;
+              const safeCurrentAmount = normalizeGoalAmount(goal.current_amount);
+              const safeTargetAmount = normalizeGoalAmount(goal.target_amount);
+              const progress = getGoalProgress(goal.current_amount, goal.target_amount);
               const IconComponent = ICON_MAP[goal.icon] || Target;
 
               return (
@@ -306,7 +306,7 @@ export default function GoalsPage() {
 
                     <div className="text-right">
                       <p className="font-semibold">
-                        {formatMoney(goal.current_amount)} / {formatMoney(goal.target_amount)}
+                        {formatMoney(safeCurrentAmount)} / {formatMoney(safeTargetAmount)}
                       </p>
                       <div className="flex justify-end mt-1">
                         <Badge variant={progress >= 100 ? 'secondary' : 'outline'}>
