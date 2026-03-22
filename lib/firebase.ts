@@ -31,7 +31,7 @@ const firebaseConfig = {
 
 const app: FirebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const auth: Auth = getAuth(app);
-const persistence = typeof window === 'undefined' ? inMemoryPersistence : browserLocalPersistence;
+const persistence = inMemoryPersistence;
 
 export const authPersistenceReady = setPersistence(auth, persistence).catch((error) => {
   console.error('Failed to set auth persistence:', error);

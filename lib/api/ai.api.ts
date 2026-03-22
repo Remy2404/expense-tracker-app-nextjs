@@ -310,10 +310,10 @@ const validateChatHistory = (data: unknown): AiChatHistoryResponse => {
 };
 
 const validateRealtimeSession = (data: unknown): RealtimeSessionResponse => {
-  const payload = assertObject(data, '/api/realtime/session');
-  assertString(payload, 'token', '/api/realtime/session');
-  assertString(payload, 'socket_url', '/api/realtime/session');
-  assertNumber(payload, 'expires_at_epoch_seconds', '/api/realtime/session');
+  const payload = assertObject(data, '/api/ai/realtime/session');
+  assertString(payload, 'token', '/api/ai/realtime/session');
+  assertString(payload, 'socket_url', '/api/ai/realtime/session');
+  assertNumber(payload, 'expires_at_epoch_seconds', '/api/ai/realtime/session');
   return payload as unknown as RealtimeSessionResponse;
 };
 
