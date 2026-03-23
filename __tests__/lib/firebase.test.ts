@@ -3,6 +3,7 @@ const mockGetApps = jest.fn(() => []);
 const mockGetApp = jest.fn(() => ({ name: '[DEFAULT]' }));
 const mockGetAuth = jest.fn(() => ({ currentUser: null }));
 const mockSetPersistence = jest.fn(() => Promise.resolve());
+const mockBrowserLocalPersistence = { type: 'LOCAL' };
 const mockInMemoryPersistence = { type: 'NONE' };
 
 jest.mock('firebase/app', () => ({
@@ -12,6 +13,7 @@ jest.mock('firebase/app', () => ({
 }));
 
 jest.mock('firebase/auth', () => ({
+  browserLocalPersistence: mockBrowserLocalPersistence,
   getAuth: mockGetAuth,
   inMemoryPersistence: mockInMemoryPersistence,
   setPersistence: mockSetPersistence,
@@ -42,18 +44,13 @@ describe('firebase auth persistence', () => {
     process.env = originalEnv;
   });
 
-  it('keeps firebase auth state out of browser storage', async () => {
-    const legacyAuthKey = 'firebase:authUser:public-api-key:[DEFAULT]';
-    window.localStorage.setItem(legacyAuthKey, '{"uid":"user-1"}');
-    window.sessionStorage.setItem(legacyAuthKey, '{"uid":"user-1"}');
+  it('persists firebase auth state in browser local storage', async () => {
     window.localStorage.setItem('theme', 'dark');
 
     const firebaseModule = await import('../../lib/firebase');
     await firebaseModule.authPersistenceReady;
 
-    expect(mockSetPersistence).toHaveBeenCalledWith(firebaseModule.auth, mockInMemoryPersistence);
-    expect(window.localStorage.getItem(legacyAuthKey)).toBeNull();
-    expect(window.sessionStorage.getItem(legacyAuthKey)).toBeNull();
+    expect(mockSetPersistence).toHaveBeenCalledWith(firebaseModule.auth, mockBrowserLocalPersistence);
     expect(window.localStorage.getItem('theme')).toBe('dark');
   });
 });

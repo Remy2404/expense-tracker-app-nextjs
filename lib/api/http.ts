@@ -11,9 +11,9 @@ const requestTimeoutMs =
   Number.isFinite(rawTimeout) && rawTimeout > 0 ? rawTimeout : DEFAULT_TIMEOUT_MS;
 
 const apiBaseUrl =
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  process.env.NEXT_PUBLIC_AI_API_URL ||
-  'http://localhost:8080';
+  process.env.NEXT_PUBLIC_API_BASE_URL?.trim() ||
+  process.env.NEXT_PUBLIC_AI_API_URL?.trim() ||
+  '/backend-api';
 const csrfBootstrapUrl = `${apiBaseUrl}/api/auth/session`;
 
 const normalizeMessage = (message: string) => message.trim() || 'AI request failed.';

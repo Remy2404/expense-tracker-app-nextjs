@@ -1,9 +1,45 @@
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
+import { existsSync, readFileSync } from 'node:fs';
 
 const childProcesses = [];
 let shuttingDown = false;
 const relayPort = Number(process.env.RELAY_PORT || process.env.PORT || 8090);
+
+const envFilePath = '.env.local';
+if (existsSync(envFilePath)) {
+  if (typeof process.loadEnvFile === 'function') {
+    process.loadEnvFile(envFilePath);
+  } else {
+    const envFileContents = readFileSync(envFilePath, 'utf8');
+    envFileContents.split(/\r?\n/).forEach((line) => {
+      const trimmedLine = line.trim();
+      if (!trimmedLine || trimmedLine.startsWith('#')) {
+        return;
+      }
+
+      const separatorIndex = trimmedLine.indexOf('=');
+      if (separatorIndex <= 0) {
+        return;
+      }
+
+      const key = trimmedLine.slice(0, separatorIndex).trim();
+      if (!key || process.env[key] !== undefined) {
+        return;
+      }
+
+      const rawValue = trimmedLine.slice(separatorIndex + 1).trim();
+      const normalizedValue =
+        rawValue.startsWith('"') && rawValue.endsWith('"')
+          ? rawValue.slice(1, -1)
+          : rawValue.startsWith("'") && rawValue.endsWith("'")
+            ? rawValue.slice(1, -1)
+            : rawValue;
+
+      process.env[key] = normalizedValue;
+    });
+  }
+}
 
 const stopAll = (exitCode = 0) => {
   if (shuttingDown) {
