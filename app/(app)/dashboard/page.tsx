@@ -92,10 +92,10 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <header className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold tracking-tight md:text-3xl bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
             Dashboard
           </h1>
           <p className="text-foreground/60">
@@ -104,10 +104,10 @@ export default function DashboardPage() {
         </div>
         <Button
           onClick={() => setIsAddModalOpen(true)}
-          className="flex items-center gap-2 whitespace-nowrap"
+          className="flex items-center gap-2 whitespace-nowrap group"
           aria-label="Add a new transaction"
         >
-          <Plus size={18} />
+          <Plus size={18} className="transition-transform group-hover:rotate-90" />
           New Transaction
         </Button>
       </header>
@@ -127,7 +127,7 @@ export default function DashboardPage() {
               <h2 id="dashboard-summary-heading" className="sr-only">
                 Monthly summary
               </h2>
-              <div className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
+              <div className="grid gap-6 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))] stagger-children">
                 <DashboardStatCard
                   title="Income"
                   value={`+${getCurrencySymbol("USD")}${totalIncome.toFixed(2)}`}

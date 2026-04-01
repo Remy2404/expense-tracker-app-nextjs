@@ -356,10 +356,12 @@ export default function ExpensesPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col flex-wrap items-start justify-between gap-4 sm:flex-row sm:items-center">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Transactions</h1>
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold tracking-tight md:text-3xl bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+            Transactions
+          </h1>
           <p className="text-muted-foreground">Manage and track your income and expenses.</p>
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
@@ -424,34 +426,37 @@ export default function ExpensesPage() {
         <PeriodModeBadge mode={periodMode} detail="Transactions" />
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Card>
-          <CardContent className="space-y-1 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Income</p>
-            <p className="text-xl font-semibold text-emerald-600">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 stagger-children">
+        <Card className="group">
+          <CardContent className="space-y-1 p-4 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground relative z-10">Income</p>
+            <p className="text-xl font-semibold text-emerald-600 relative z-10 transition-transform group-hover:scale-105">
               +{getCurrencySymbol('USD')}
               {totals.income.toFixed(2)}
             </p>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="space-y-1 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Expense</p>
-            <p className="text-xl font-semibold text-destructive">
+        <Card className="group">
+          <CardContent className="space-y-1 p-4 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-destructive/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground relative z-10">Expense</p>
+            <p className="text-xl font-semibold text-destructive relative z-10 transition-transform group-hover:scale-105">
               -{getCurrencySymbol('USD')}
               {totals.expense.toFixed(2)}
             </p>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="space-y-1 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Balance</p>
-            <p className={`text-xl font-semibold ${totals.balance >= 0 ? 'text-emerald-600' : 'text-destructive'}`}>
+        <Card className="group">
+          <CardContent className="space-y-1 p-4 relative overflow-hidden">
+            <div className={`absolute inset-0 bg-gradient-to-br ${totals.balance >= 0 ? 'from-emerald-500/10' : 'from-destructive/10'} via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground relative z-10">Balance</p>
+            <p className={`text-xl font-semibold relative z-10 transition-transform group-hover:scale-105 ${totals.balance >= 0 ? 'text-emerald-600' : 'text-destructive'}`}>
               {totals.balance >= 0 ? '+' : '-'}
               {getCurrencySymbol('USD')}
               {Math.abs(totals.balance).toFixed(2)}
             </p>
-            <p className="text-xs text-muted-foreground">{transactionCount} transactions</p>
+            <p className="text-xs text-muted-foreground relative z-10">{transactionCount} transactions</p>
           </CardContent>
         </Card>
       </div>
@@ -573,24 +578,28 @@ export default function ExpensesPage() {
               </CardContent>
             ) : (
               <div className="divide-y divide-border">
-                {sortedFilteredExpenses.map((expense) => {
+                {sortedFilteredExpenses.map((expense, index) => {
                   const receiptPaths = expense.receipt_paths ?? [];
                   const visibleReceipts = receiptPaths.slice(0, RECEIPT_THUMBNAIL_LIMIT);
                   const hiddenReceiptCount = Math.max(0, receiptPaths.length - RECEIPT_THUMBNAIL_LIMIT);
                   const expenseLabel = expense.notes || expense.note || 'Transaction';
 
                   return (
-                    <div key={expense.id} className="flex items-center justify-between gap-4 p-4 sm:p-5">
+                    <div
+                      key={expense.id}
+                      className="flex items-center justify-between gap-4 p-4 sm:p-5 hover:bg-muted/30 transition-colors group animate-fade-in"
+                      style={{ animationDelay: `${index * 0.03}s` }}
+                    >
                       <div className="min-w-0 space-y-1">
-                        <p className="truncate font-medium">{expenseLabel}</p>
+                        <p className="truncate font-medium group-hover:text-primary transition-colors">{expenseLabel}</p>
                         <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                          <Badge variant="outline">{getCategoryName(expense.category_id)}</Badge>
-                          <Badge variant={getTransactionType(expense) === 'income' ? 'default' : 'secondary'}>
+                          <Badge variant="outline" className="transition-transform group-hover:scale-105">{getCategoryName(expense.category_id)}</Badge>
+                          <Badge variant={getTransactionType(expense) === 'income' ? 'default' : 'secondary'} className="transition-transform group-hover:scale-105">
                             {getTransactionType(expense) === 'income' ? 'Income' : 'Expense'}
                           </Badge>
                           <span>{toSafeDate(expense.date).toLocaleDateString()}</span>
                           {receiptPaths.length > 0 ? (
-                            <Badge variant="outline" className="inline-flex items-center gap-1">
+                            <Badge variant="outline" className="inline-flex items-center gap-1 transition-transform group-hover:scale-105">
                               <Paperclip className="h-3 w-3" />
                               {receiptPaths.length} receipt
                               {receiptPaths.length === 1 ? '' : 's'}
@@ -603,7 +612,7 @@ export default function ExpensesPage() {
                               <button
                                 key={`${expense.id}-receipt-${index}`}
                                 type="button"
-                                className="h-8 w-8 overflow-hidden rounded border border-border bg-muted transition hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                className="h-8 w-8 overflow-hidden rounded border border-border bg-muted transition-all hover:border-primary/40 hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 onClick={() => openReceiptPreview(receiptPaths, index)}
                                 aria-label={`Preview receipt ${index + 1} for ${expenseLabel}`}
                               >
@@ -620,7 +629,7 @@ export default function ExpensesPage() {
                             {hiddenReceiptCount > 0 ? (
                               <button
                                 type="button"
-                                className="h-8 rounded border border-border px-2 text-xs text-muted-foreground transition hover:border-primary/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                className="h-8 rounded border border-border px-2 text-xs text-muted-foreground transition-all hover:border-primary/40 hover:text-foreground hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 onClick={() => openReceiptPreview(receiptPaths, RECEIPT_THUMBNAIL_LIMIT)}
                                 aria-label={`Preview ${hiddenReceiptCount} more receipt${hiddenReceiptCount === 1 ? '' : 's'}`}
                               >
@@ -633,7 +642,7 @@ export default function ExpensesPage() {
 
                       <div className="flex items-center gap-1 sm:gap-3">
                         <p
-                          className={`text-right text-base font-semibold sm:text-lg ${
+                          className={`text-right text-base font-semibold sm:text-lg transition-transform group-hover:scale-105 ${
                             getSignedTransactionAmount(expense) >= 0 ? 'text-emerald-600' : 'text-destructive'
                           }`}
                         >
@@ -641,7 +650,7 @@ export default function ExpensesPage() {
                           {getCurrencySymbol(expense.currency || 'USD')}
                           {Math.abs(expense.amount).toFixed(2)}
                         </p>
-                        <Button type="button" variant="ghost" size="icon" onClick={() => handleEdit(expense)} aria-label="Edit transaction">
+                        <Button type="button" variant="ghost" size="icon" onClick={() => handleEdit(expense)} aria-label="Edit transaction" className="transition-transform hover:scale-110">
                           <Edit2 className="h-4 w-4" />
                         </Button>
                         <Button
@@ -651,6 +660,7 @@ export default function ExpensesPage() {
                           onClick={() => handleRequestDelete(expense)}
                           disabled={deletingId === expense.id}
                           aria-label="Delete transaction"
+                          className="transition-transform hover:scale-110"
                         >
                           {deletingId === expense.id ? (
                             <Loader2 className="h-4 w-4 animate-spin text-destructive" />

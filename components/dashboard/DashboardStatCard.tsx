@@ -21,21 +21,36 @@ export function DashboardStatCard({
   icon,
 }: DashboardStatCardProps) {
   return (
-    <Card className='h-full'>
-      <CardHeader className='space-y-3 pb-2'>
-        <div className='flex items-center justify-between gap-2'>
-          <CardTitle className='text-sm font-medium text-muted-foreground'>{title}</CardTitle>
+    <Card className="h-full group overflow-hidden relative">
+      {/* Gradient overlay on hover */}
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+      <CardHeader className="space-y-3 pb-2 relative z-10">
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="text-sm font-medium text-muted-foreground transition-colors group-hover:text-foreground">
+            {title}
+          </CardTitle>
           {badgeLabel ? (
-            <Badge variant='secondary' className='whitespace-nowrap'>
+            <Badge variant="secondary" className="whitespace-nowrap transition-transform group-hover:scale-105">
               {badgeLabel}
             </Badge>
           ) : null}
         </div>
-        {icon ? <div className='text-muted-foreground'>{icon}</div> : null}
+        {icon ? (
+          <div className="text-muted-foreground transition-all group-hover:scale-110 group-hover:text-primary">
+            {icon}
+          </div>
+        ) : null}
       </CardHeader>
-      <CardContent className='space-y-1'>
-        <p className={cn('text-3xl font-bold tracking-tight', valueClassName)}>{value}</p>
-        {subtitle ? <p className='text-sm text-muted-foreground'>{subtitle}</p> : null}
+      <CardContent className="space-y-1 relative z-10">
+        <p className={cn('text-3xl font-bold tracking-tight transition-all duration-300 animate-count-up', valueClassName)}>
+          {value}
+        </p>
+        {subtitle ? (
+          <p className="text-sm text-muted-foreground transition-colors group-hover:text-foreground/80">
+            {subtitle}
+          </p>
+        ) : null}
       </CardContent>
     </Card>
   );

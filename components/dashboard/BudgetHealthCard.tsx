@@ -28,38 +28,46 @@ export function BudgetHealthCard({
   const statusBadgeVariant = isOverBudget ? 'default' : 'secondary';
 
   return (
-    <Card className='h-full'>
-      <CardHeader className='pb-3'>
-        <div className='flex items-center justify-between gap-2'>
-          <CardTitle className='text-base'>Budget Health</CardTitle>
-          <Badge variant={statusBadgeVariant}>{statusLabel}</Badge>
+    <Card className="h-full group overflow-hidden relative">
+      {/* Gradient overlay based on budget status */}
+      <div className={cn(
+        "absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300",
+        isOverBudget
+          ? "bg-gradient-to-br from-destructive/10 via-transparent to-transparent"
+          : "bg-gradient-to-br from-emerald-500/10 via-transparent to-transparent"
+      )} />
+
+      <CardHeader className="pb-3 relative z-10">
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="text-base transition-colors group-hover:text-primary">Budget Health</CardTitle>
+          <Badge variant={statusBadgeVariant} className="transition-transform group-hover:scale-105">{statusLabel}</Badge>
         </div>
       </CardHeader>
-      <CardContent className='space-y-4'>
-        <dl className='grid grid-cols-3 gap-4 text-sm'>
-          <div className='min-w-0 space-y-2'>
-            <dt className='text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground'>
+      <CardContent className="space-y-4 relative z-10">
+        <dl className="grid grid-cols-3 gap-4 text-sm">
+          <div className="min-w-0 space-y-2">
+            <dt className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
               Budgeted
             </dt>
-            <dd className='truncate text-base font-semibold tabular-nums'>
+            <dd className="truncate text-base font-semibold tabular-nums transition-transform group-hover:scale-105">
               {formatMoney(totalBudget, currencyCode)}
             </dd>
           </div>
-          <div className='min-w-0 space-y-2'>
-            <dt className='text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground'>
+          <div className="min-w-0 space-y-2">
+            <dt className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
               Spent
             </dt>
-            <dd className='truncate text-base font-semibold tabular-nums'>
+            <dd className="truncate text-base font-semibold tabular-nums transition-transform group-hover:scale-105">
               {formatMoney(totalSpent, currencyCode)}
             </dd>
           </div>
-          <div className='min-w-0 space-y-2'>
-            <dt className='text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground'>
+          <div className="min-w-0 space-y-2">
+            <dt className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
               Remaining
             </dt>
             <dd
               className={cn(
-                'truncate text-base font-semibold tabular-nums',
+                'truncate text-base font-semibold tabular-nums transition-transform group-hover:scale-105',
                 remainingBudget < 0 ? 'text-destructive' : 'text-emerald-600'
               )}
             >
@@ -69,24 +77,24 @@ export function BudgetHealthCard({
         </dl>
 
         {!hasCurrentBudget ? (
-          <Alert>
-            <AlertCircle className='h-4 w-4' />
+          <Alert className="animate-fade-in">
+            <AlertCircle className="h-4 w-4" />
             <AlertTitle>No monthly budget yet</AlertTitle>
             <AlertDescription>
               Add a budget for this month to track your remaining amount in real time.
             </AlertDescription>
           </Alert>
         ) : isOverBudget ? (
-          <Alert variant='destructive'>
-            <ShieldAlert className='h-4 w-4' />
+          <Alert variant="destructive" className="animate-fade-in">
+            <ShieldAlert className="h-4 w-4" />
             <AlertTitle>Budget exceeded</AlertTitle>
             <AlertDescription>
               You are over budget by {formatMoney(Math.abs(remainingBudget), currencyCode)}.
             </AlertDescription>
           </Alert>
         ) : (
-          <Alert>
-            <CheckCircle2 className='h-4 w-4 text-emerald-600' />
+          <Alert className="animate-fade-in">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
             <AlertTitle>Spending is under control</AlertTitle>
             <AlertDescription>
               You still have {formatMoney(remainingBudget, currencyCode)} available this month.

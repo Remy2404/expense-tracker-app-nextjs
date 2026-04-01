@@ -44,11 +44,11 @@ export function NavContent({ collapsed = false, onNavigate }: NavContentProps) {
                   const active = isNavItemActive(pathname, item);
                   const Icon = item.icon;
                   const itemClassName = cn(
-                    'flex min-h-11 items-center rounded-lg text-sm font-medium transition-colors',
+                    'flex min-h-11 items-center rounded-lg text-sm font-medium transition-all duration-200',
                     collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2.5',
                     active
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-foreground/80 hover:bg-accent hover:text-accent-foreground'
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'text-foreground/80 hover:bg-accent hover:text-accent-foreground hover:translate-x-1'
                   );
                   const itemContent = (
                     <Link
@@ -59,7 +59,7 @@ export function NavContent({ collapsed = false, onNavigate }: NavContentProps) {
                       onClick={onNavigate}
                       className={itemClassName}
                     >
-                      <Icon size={18} />
+                      <Icon size={18} className={cn("transition-transform", active && "scale-110")} />
                       {collapsed ? <span className="sr-only">{item.name}</span> : item.name}
                     </Link>
                   );
