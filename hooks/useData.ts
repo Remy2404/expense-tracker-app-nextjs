@@ -1,9 +1,7 @@
-import { useEffect, useRef } from 'react';
 import useSWR from 'swr';
 import useSWRMutation from 'swr/mutation';
 import { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase';
 import { aiHttpClient } from '@/lib/api/http';
 import { financeApi, type FinanceSummaryPeriod, type FinanceSummaryResponse } from '@/lib/api/finance.api';
 import { dashboardApi, type DashboardSummaryResponse } from '@/lib/api/dashboard.api';
@@ -23,7 +21,6 @@ import { getSyncPushFailureMessage } from '@/lib/sync/pushResult';
 import { Expense, Category, CategoryType, Budget, RecurringExpense } from '@/types';
 import { Goal, GoalTransaction } from '@/types/goals';
 import { useAuth } from '@/contexts/AuthContext';
-import { MOBILE_DEFAULT_CATEGORIES } from '@/constants/defaultCategories';
 import { DEFAULT_TRANSACTION_TYPE, getCategoryType, getTransactionType } from '@/lib/transactions';
 
 type CategoryWriteInput = Partial<Category> & {
@@ -208,6 +205,23 @@ const fetchGoalTransactionsByGoalId = async (goalId: string): Promise<GoalTransa
   return response.data || [];
 };
 
+/**
+ * Reads an item from the SWR in-memory cache by list key and item id.
+ * Falls back to a network fetch on cache miss (rare — the list is always fetched
+ * before any edit/delete action is possible in the UI).
+ */
+const getCached = async <T extends { id: string }>(
+  cache: { get: (key: string) => { data?: unknown } | undefined },
+  table: string,
+  id: string,
+): Promise<T> => {
+  const list = cache.get(table)?.data as T[] | undefined;
+  const found = list?.find((item) => item.id === id);
+  if (found) return found;
+  // Cache miss — graceful fallback to network
+  return fetchSingle<T>(table, id);
+};
+
 const toSyncCategoryItem = (category: CategoryWriteInput): SyncCategoryItem => {
   const createdAt = toRequiredIsoString(category.created_at);
   const updatedAt = toRequiredIsoString(category.updated_at, createdAt);
@@ -349,7 +363,9 @@ const toSyncRecurringItem = (recurring: RecurringWriteInput): SyncRecurringItem 
 export function useExpenses() {
   const { user } = useAuth();
   const { data, error, isLoading, mutate } = useSWR<Expense[]>(user ? 'expenses' : null, fetcher, {
-    revalidateOnFocus: true,
+    // revalidateOnFocus is disabled globally in SWRProvider.
+    // Mutations (add/edit/delete) explicitly call mutate(), keeping data fresh.
+    dedupingInterval: 10_000,
   });
 
   return {
@@ -365,7 +381,7 @@ export function useFinanceSummary(period: FinanceSummaryPeriod = 'all-time') {
   const { data, error, isLoading, mutate } = useSWR<FinanceSummaryResponse>(
     user ? ['finance-summary', period] : null,
     () => financeApi.getSummary(period),
-    { revalidateOnFocus: true },
+    { dedupingInterval: 30_000 },
   );
 
   return {
@@ -381,7 +397,7 @@ export function useDashboardSummary() {
   const { data, error, isLoading, mutate } = useSWR<DashboardSummaryResponse>(
     user ? 'dashboard-summary' : null,
     () => dashboardApi.getSummary(),
-    { revalidateOnFocus: true },
+    { dedupingInterval: 30_000 },
   );
 
   return {
@@ -397,7 +413,7 @@ export function useBudgetSummary(month: string) {
   const { data, error, isLoading, mutate } = useSWR<BudgetSummaryResponse>(
     user && month ? ['budget-summary', month] : null,
     () => budgetApi.getSummary(month),
-    { revalidateOnFocus: true },
+    { dedupingInterval: 30_000 },
   );
 
   return {
@@ -410,52 +426,9 @@ export function useBudgetSummary(month: string) {
 
 export function useCategories() {
   const { user } = useAuth();
-  const seededRef = useRef<string | null>(null);
-  const inFlightRef = useRef(false);
-  const { data, error, isLoading, mutate } = useSWR<Category[]>(user ? 'categories' : null, fetcher);
-
-  useEffect(() => {
-    if (!user?.uid || isLoading || !data || inFlightRef.current) return;
-
-    const currentKey = `${user.uid}:${data.length}`;
-    if (seededRef.current === currentKey) return;
-
-    const existingNames = new Set(data.map((category) => category.name.trim().toLowerCase()));
-    const missingDefaults = MOBILE_DEFAULT_CATEGORIES.filter(
-      (defaultCategory) => !existingNames.has(defaultCategory.name.trim().toLowerCase())
-    );
-
-    if (missingDefaults.length === 0) {
-      seededRef.current = currentKey;
-      return;
-    }
-
-    inFlightRef.current = true;
-    const seedDefaults = async () => {
-      try {
-        const timestamp = nowIso();
-        await pushSyncChange({
-          categories: missingDefaults.map((category) =>
-            toSyncCategoryItem({
-              ...category,
-              id: createUuid(),
-              is_default: category.is_default ?? true,
-              created_at: timestamp,
-              updated_at: timestamp,
-            })
-          ),
-        });
-        await mutate();
-      } catch (seedError) {
-        console.error('Error seeding default categories:', seedError);
-      } finally {
-        inFlightRef.current = false;
-        seededRef.current = currentKey;
-      }
-    };
-
-    void seedDefaults();
-  }, [user?.uid, data, isLoading, mutate]);
+  const { data, error, isLoading, mutate } = useSWR<Category[]>(user ? 'categories' : null, fetcher, {
+    dedupingInterval: 30_000,
+  });
 
   return {
     categories: data || [],
@@ -467,7 +440,9 @@ export function useCategories() {
 
 export function useBudgets() {
   const { user } = useAuth();
-  const { data, error, isLoading, mutate } = useSWR<Budget[]>(user ? 'budgets' : null, fetcher);
+  const { data, error, isLoading, mutate } = useSWR<Budget[]>(user ? 'budgets' : null, fetcher, {
+    dedupingInterval: 30_000,
+  });
   return {
     budgets: data || [],
     isLoading,
@@ -500,10 +475,10 @@ export function useAddBudget() {
 }
 
 export function useEditBudget() {
-  const { mutate } = useSWRConfig();
+  const { mutate, cache } = useSWRConfig();
   return useSWRMutation('budgets', async (_key, { arg }: { arg: { id: string } & Partial<Omit<Budget, 'id' | 'created_at' | 'updated_at'>> }) => {
-    const existingBudget = await fetchSingle<Budget>('budgets', arg.id);
-    const existingCategoryBudgets = await fetchCategoryBudgetsByBudgetId(arg.id);
+    const existingBudget = await getCached<BudgetRecord>(cache, 'budgets', arg.id);
+    const existingCategoryBudgets = existingBudget.category_budgets ?? await fetchCategoryBudgetsByBudgetId(arg.id);
     const updatedBudget: BudgetRecord = {
       ...existingBudget,
       ...arg,
@@ -517,10 +492,10 @@ export function useEditBudget() {
 }
 
 export function useDeleteBudget() {
-  const { mutate } = useSWRConfig();
+  const { mutate, cache } = useSWRConfig();
   return useSWRMutation('budgets', async (_key, { arg }: { arg: { id: string } }) => {
-    const existingBudget = await fetchSingle<Budget>('budgets', arg.id);
-    const existingCategoryBudgets = await fetchCategoryBudgetsByBudgetId(arg.id);
+    const existingBudget = await getCached<BudgetRecord>(cache, 'budgets', arg.id);
+    const existingCategoryBudgets = existingBudget.category_budgets ?? await fetchCategoryBudgetsByBudgetId(arg.id);
     const deletedAt = nowIso();
     await pushSyncChange({
       budgets: [
@@ -543,7 +518,9 @@ export function useDeleteBudget() {
 
 export function useGoals() {
   const { user } = useAuth();
-  const { data, error, isLoading, mutate } = useSWR<Goal[]>(user ? 'savings_goals' : null, fetcher);
+  const { data, error, isLoading, mutate } = useSWR<Goal[]>(user ? 'savings_goals' : null, fetcher, {
+    dedupingInterval: 30_000,
+  });
   return {
     goals: data || [],
     isLoading,
@@ -582,9 +559,9 @@ export function useAddCategory() {
 }
 
 export function useEditCategory() {
-  const { mutate } = useSWRConfig();
+  const { mutate, cache } = useSWRConfig();
   return useSWRMutation('categories', async (_key, { arg }: { arg: { id: string } & Partial<Omit<Category, 'id'>> }) => {
-    const existingCategory = await fetchSingle<Category>('categories', arg.id);
+    const existingCategory = await getCached<Category>(cache, 'categories', arg.id);
     const updatedCategory: CategoryWriteInput = {
       ...existingCategory,
       ...arg,
@@ -597,9 +574,9 @@ export function useEditCategory() {
 }
 
 export function useDeleteCategory() {
-  const { mutate } = useSWRConfig();
+  const { mutate, cache } = useSWRConfig();
   return useSWRMutation('categories', async (_key, { arg }: { arg: { id: string } }) => {
-    const existingCategory = await fetchSingle<Category>('categories', arg.id);
+    const existingCategory = await getCached<Category>(cache, 'categories', arg.id);
     const deletedAt = nowIso();
     await pushSyncChange({
       categories: [
@@ -634,9 +611,9 @@ export function useAddGoal() {
 }
 
 export function useEditGoal() {
-  const { mutate } = useSWRConfig();
+  const { mutate, cache } = useSWRConfig();
   return useSWRMutation('savings_goals', async (_key, { arg }: { arg: { id: string } & Partial<Omit<Goal, 'id'>> }) => {
-    const existingGoal = await fetchSingle<Goal>('savings_goals', arg.id);
+    const existingGoal = await getCached<Goal>(cache, 'savings_goals', arg.id);
     const existingTransactions = await fetchGoalTransactionsByGoalId(arg.id);
     const updatedGoal: Goal = {
       ...existingGoal,
@@ -650,9 +627,9 @@ export function useEditGoal() {
 }
 
 export function useDeleteGoal() {
-  const { mutate } = useSWRConfig();
+  const { mutate, cache } = useSWRConfig();
   return useSWRMutation('savings_goals', async (_key, { arg }: { arg: { id: string } }) => {
-    const existingGoal = await fetchSingle<Goal>('savings_goals', arg.id);
+    const existingGoal = await getCached<Goal>(cache, 'savings_goals', arg.id);
     const existingTransactions = await fetchGoalTransactionsByGoalId(arg.id);
     const deletedAt = nowIso();
     await pushSyncChange({
@@ -674,9 +651,9 @@ export function useDeleteGoal() {
 }
 
 export function useAddGoalTransaction() {
-  const { mutate } = useSWRConfig();
+  const { mutate, cache } = useSWRConfig();
   return useSWRMutation('goal_transactions', async (_key, { arg }: { arg: Omit<GoalTransaction, 'id'> & { new_balance: number } }) => {
-    const existingGoal = await fetchSingle<Goal>('savings_goals', arg.goal_id);
+    const existingGoal = await getCached<Goal>(cache, 'savings_goals', arg.goal_id);
     const existingTransactions = await fetchGoalTransactionsByGoalId(arg.goal_id);
     const transaction: GoalTransaction = {
       id: createUuid(),
@@ -705,9 +682,9 @@ export function useAddGoalTransaction() {
 }
 
 export function useUpdateGoalBalance() {
-  const { mutate } = useSWRConfig();
+  const { mutate, cache } = useSWRConfig();
   return useSWRMutation('savings_goals', async (_key, { arg }: { arg: { id: string; current_amount: number } }) => {
-    const existingGoal = await fetchSingle<Goal>('savings_goals', arg.id);
+    const existingGoal = await getCached<Goal>(cache, 'savings_goals', arg.id);
     const existingTransactions = await fetchGoalTransactionsByGoalId(arg.id);
     const updatedGoal: Goal = {
       ...existingGoal,
@@ -754,9 +731,9 @@ export function useAddExpense() {
 }
 
 export function useEditExpense() {
-  const { mutate } = useSWRConfig();
+  const { mutate, cache } = useSWRConfig();
   return useSWRMutation('expenses', async (_key, { arg }: { arg: { id: string } & Partial<Omit<Expense, 'id' | 'created_at' | 'updated_at'>> }) => {
-    const existingExpense = await fetchSingle<Expense>('expenses', arg.id);
+    const existingExpense = await getCached<Expense>(cache, 'expenses', arg.id);
     const updatedExpense: ExpenseWriteInput = {
       ...existingExpense,
       ...arg,
@@ -770,9 +747,9 @@ export function useEditExpense() {
 }
 
 export function useDeleteExpense() {
-  const { mutate } = useSWRConfig();
+  const { mutate, cache } = useSWRConfig();
   return useSWRMutation('expenses', async (_key, { arg }: { arg: { id: string } }) => {
-    const existingExpense = await fetchSingle<Expense>('expenses', arg.id);
+    const existingExpense = await getCached<Expense>(cache, 'expenses', arg.id);
     const deletedAt = nowIso();
     await pushSyncChange({
       expenses: [
@@ -792,7 +769,9 @@ export function useDeleteExpense() {
 
 export function useRecurringExpenses() {
   const { user } = useAuth();
-  const { data, error, isLoading, mutate } = useSWR<RecurringExpense[]>(user ? 'recurring_expenses' : null, fetcher);
+  const { data, error, isLoading, mutate } = useSWR<RecurringExpense[]>(user ? 'recurring_expenses' : null, fetcher, {
+    dedupingInterval: 60_000,
+  });
   return {
     recurringExpenses: data || [],
     isLoading,
@@ -819,9 +798,9 @@ export function useAddRecurringExpense() {
 }
 
 export function useEditRecurringExpense() {
-  const { mutate } = useSWRConfig();
+  const { mutate, cache } = useSWRConfig();
   return useSWRMutation('recurring_expenses', async (_key, { arg }: { arg: { id: string } & Partial<Omit<RecurringExpense, 'id' | 'created_at' | 'updated_at'>> }) => {
-    const existingRecurringExpense = await fetchSingle<RecurringExpense>('recurring_expenses', arg.id);
+    const existingRecurringExpense = await getCached<RecurringExpense>(cache, 'recurring_expenses', arg.id);
     const updatedRecurringExpense: RecurringExpense = {
       ...existingRecurringExpense,
       ...arg,
@@ -834,9 +813,9 @@ export function useEditRecurringExpense() {
 }
 
 export function useDeleteRecurringExpense() {
-  const { mutate } = useSWRConfig();
+  const { mutate, cache } = useSWRConfig();
   return useSWRMutation('recurring_expenses', async (_key, { arg }: { arg: { id: string } }) => {
-    const existingRecurringExpense = await fetchSingle<RecurringExpense>('recurring_expenses', arg.id);
+    const existingRecurringExpense = await getCached<RecurringExpense>(cache, 'recurring_expenses', arg.id);
     const deletedAt = nowIso();
     await pushSyncChange({
       recurring: [
@@ -854,9 +833,9 @@ export function useDeleteRecurringExpense() {
 }
 
 export function useToggleRecurringExpense() {
-  const { mutate } = useSWRConfig();
+  const { mutate, cache } = useSWRConfig();
   return useSWRMutation('recurring_expenses', async (_key, { arg }: { arg: { id: string; isActive: boolean } }) => {
-    const existingRecurringExpense = await fetchSingle<RecurringExpense>('recurring_expenses', arg.id);
+    const existingRecurringExpense = await getCached<RecurringExpense>(cache, 'recurring_expenses', arg.id);
     const updatedRecurringExpense: RecurringExpense = {
       ...existingRecurringExpense,
       is_active: arg.isActive,
