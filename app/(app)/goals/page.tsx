@@ -49,6 +49,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { sanitizeString, sanitizeNumericString, sanitizeDateString } from '@/lib/security';
 
 const ICON_MAP: Record<
   string,
@@ -106,13 +107,28 @@ export default function GoalsPage() {
     if (searchParams.get('create') !== 'goal') {
       return null;
     }
+
+    // Sanitize all input parameters
+    const name = sanitizeString(searchParams.get('name') || '', 200);
+    const targetAmount = sanitizeNumericString(searchParams.get('targetAmount') || '0', 0, 999999999);
+    const currentAmount = sanitizeNumericString(searchParams.get('currentAmount') || '0', 0, 999999999);
+    const deadline = sanitizeDateString(searchParams.get('deadline') || '') || new Date().toISOString().split('T')[0];
+    const color = sanitizeString(searchParams.get('color') || '#10B981', 20);
+    const icon = sanitizeString(searchParams.get('icon') || 'target', 50);
+
+    // Validate color is a hex color
+    const validColor = /^#[0-9A-Fa-f]{6}$/.test(color) ? color : '#10B981';
+
+    // Validate icon is in the allowed list
+    const validIcon = Object.keys(ICON_MAP).includes(icon) ? icon : 'target';
+
     return {
-      name: searchParams.get('name') || '',
-      target_amount: Number(searchParams.get('targetAmount') || '0') || 0,
-      current_amount: Number(searchParams.get('currentAmount') || '0') || 0,
-      deadline: searchParams.get('deadline') || new Date().toISOString().split('T')[0],
-      color: searchParams.get('color') || '#10B981',
-      icon: searchParams.get('icon') || 'target',
+      name,
+      target_amount: Number(targetAmount) || 0,
+      current_amount: Number(currentAmount) || 0,
+      deadline,
+      color: validColor,
+      icon: validIcon,
       is_archived: false,
     };
   }, [searchParams]);
