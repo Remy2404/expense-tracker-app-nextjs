@@ -12,7 +12,7 @@ export interface AiParseResponse {
   amount: number | null;
   currency: string | null;
   merchant: string | null;
-  date: string | null;
+  date: string | null; 
   note: string | null;
   note_summary: string | null;
   suggested_category_id: string | null;
@@ -141,6 +141,8 @@ export interface AiChatResponse {
   needs_confirmation: boolean;
   safety_warnings: string[];
   field_confidences?: Record<string, number> | null;
+  pending_action_id?: string | null;
+  action_type?: string | null;
 }
 
 export type AiChatRole = 'user' | 'assistant';
@@ -152,6 +154,8 @@ export interface AiChatMessage {
   createdAt: number;
   explainability?: AiChatExplainability | null;
   field_confidences?: Record<string, number> | null;
+  pendingActionId?: string | null;
+  actionType?: string | null;
 }
 
 export interface AiChatPersistedMessage {

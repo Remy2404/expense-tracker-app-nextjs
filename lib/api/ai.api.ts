@@ -266,6 +266,8 @@ const validateChat = (data: unknown): AiChatResponse => {
   assertStringArray(payload, 'safety_warnings', '/api/ai/chat');
   assertExplainability(payload, '/api/ai/chat');
   assertSuggestedActions(payload, '/api/ai/chat');
+  assertOptionalNullableString(payload, 'pending_action_id', '/api/ai/chat');
+  assertOptionalNullableString(payload, 'action_type', '/api/ai/chat');
 
   assertNullableActionPayload(payload.payload, '/api/ai/chat');
   payload.payload = normalizeActionPayloadKeys(payload.payload);
@@ -472,6 +474,22 @@ export const aiApi = {
         assertOptionalNullableString(nudge, 'generated_at', '/api/ai/nudges');
       });
       return payload as unknown as NudgesResponse;
+    } catch (error) {
+      throw normalizeAiApiError(error);
+    }
+  },
+
+  async confirmAction(actionId: string): Promise<void> {
+    try {
+      await aiHttpClient.post(`/api/ai/chat/actions/${actionId}/confirm`);
+    } catch (error) {
+      throw normalizeAiApiError(error);
+    }
+  },
+
+  async cancelAction(actionId: string): Promise<void> {
+    try {
+      await aiHttpClient.post(`/api/ai/chat/actions/${actionId}/cancel`);
     } catch (error) {
       throw normalizeAiApiError(error);
     }

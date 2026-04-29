@@ -8,10 +8,11 @@ const requiredFirebaseEnvVars = {
   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   NEXT_PUBLIC_FIREBASE_APP_ID: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 } as const;
 
 const missingFirebaseEnvVars = Object.entries(requiredFirebaseEnvVars)
-  .filter(([, value]) => !value)
+  .filter(([name, value]) => name !== 'NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID' && !value)
   .map(([name]) => name);
 
 if (missingFirebaseEnvVars.length > 0) {
@@ -27,6 +28,7 @@ const firebaseConfig = {
   storageBucket: requiredFirebaseEnvVars.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: requiredFirebaseEnvVars.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: requiredFirebaseEnvVars.NEXT_PUBLIC_FIREBASE_APP_ID,
+  measurementId: requiredFirebaseEnvVars.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
 const app: FirebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
