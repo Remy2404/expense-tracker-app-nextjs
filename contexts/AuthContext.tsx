@@ -81,6 +81,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return 'Authentication provider configuration is missing. Verify Google sign-in is enabled in Firebase Console.';
       case 'auth/network-request-failed':
         return 'Network request failed while contacting Firebase Authentication.';
+      case 'auth/internal-error':
+        return 'Google sign-in failed due to an internal auth error. Check browser console for CSP blocks and ensure Google/Firebase domains are allowed by Content-Security-Policy.';
       case 'auth/invalid-credential':
       case 'auth/wrong-password':
       case 'auth/user-not-found':
