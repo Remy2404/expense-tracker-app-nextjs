@@ -57,10 +57,6 @@ const nextConfig: NextConfig = {
             value: 'same-origin-allow-popups',
           },
           {
-            key: 'X-Frame-Options',
-            value: 'DENY',
-          },
-          {
             key: 'X-Content-Type-Options',
             value: 'nosniff',
           },
