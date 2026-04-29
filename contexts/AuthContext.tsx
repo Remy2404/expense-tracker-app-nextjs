@@ -71,6 +71,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return 'Please sign in again, then try linking Google.';
       case 'auth/operation-not-allowed':
         return 'This sign-in method is not enabled in Firebase Authentication.';
+      case 'auth/unauthorized-domain':
+        return `This domain is not authorized for Firebase Google sign-in (${window.location.hostname}). Add it in Firebase Console -> Authentication -> Settings -> Authorized domains.`;
+      case 'auth/app-not-authorized':
+        return 'This app configuration is not authorized for Firebase Authentication. Check Firebase API key restrictions and auth domain settings.';
+      case 'auth/invalid-api-key':
+        return 'Firebase API key is invalid in the current environment configuration.';
+      case 'auth/configuration-not-found':
+        return 'Authentication provider configuration is missing. Verify Google sign-in is enabled in Firebase Console.';
+      case 'auth/network-request-failed':
+        return 'Network request failed while contacting Firebase Authentication.';
       case 'auth/invalid-credential':
       case 'auth/wrong-password':
       case 'auth/user-not-found':
@@ -86,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       case 'auth/weak-password':
         return 'Password is too weak. Please use a stronger password.';
       default:
+        console.error('Unhandled Firebase auth error:', error.code, error.message);
         return fallback;
     }
   }, []);
