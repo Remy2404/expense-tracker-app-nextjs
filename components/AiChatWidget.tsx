@@ -184,7 +184,7 @@ export function AiChatWidget() {
   const { trigger: addGoal } = useAddGoal();
   const { trigger: addCategory } = useAddCategory();
   const { trigger: addRecurringExpense } = useAddRecurringExpense();
-  const { categories } = useCategories();
+  const { categories } = useCategories(isOpen);
   const { mutate } = useSWRConfig();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -672,7 +672,7 @@ export function AiChatWidget() {
   );
 
   useEffect(() => {
-    if (!uid) {
+    if (!uid || !isOpen) {
       return;
     }
 
@@ -725,6 +725,7 @@ export function AiChatWidget() {
     applyChatResponse,
     applyMirroredChatResponse,
     connectRealtimeIfAvailable,
+    isOpen,
     uid,
     upsertAssistantMessage,
     upsertUserMessage,
@@ -841,7 +842,7 @@ export function AiChatWidget() {
   const handleConfirmAction = async (actionId: string) => {
     setActionLoading((prev) => ({ ...prev, [actionId]: true }));
     try {
-      const result = await aiApi.confirmAction(actionId);
+      await aiApi.confirmAction(actionId);
       setMessages((prev) =>
         prev.map((m) =>
           m.pendingActionId === actionId

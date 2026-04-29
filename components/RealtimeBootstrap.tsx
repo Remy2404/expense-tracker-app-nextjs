@@ -20,7 +20,7 @@ const shouldRevalidateKey = (key: unknown, entities?: string[]) => {
       return hasRelevantEntity(entities, ['expenses', 'categories', 'budgets', 'goals', 'recurring']);
     }
     if (key === 'dashboard-summary') {
-      return hasRelevantEntity(entities, ['expenses']);
+      return hasRelevantEntity(entities, ['expenses', 'categories', 'budgets']);
     }
     if (key === 'expenses') {
       return hasRelevantEntity(entities, ['expenses']);

@@ -1,57 +1,45 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
-import { useBudgets, useExpenses } from '@/hooks/useData';
-import { isExpenseTransaction } from '@/lib/transactions';
+import { useEffect } from 'react';
+import { useDashboardSummary } from '@/hooks/useData';
 import { useNotificationStore } from '@/store/notificationStore';
 
 const BUDGET_ALERT_THRESHOLDS = [80, 100] as const;
 
 export function useNotifications() {
-  const { budgets, isLoading: budgetsLoading } = useBudgets();
-  const { expenses, isLoading: expensesLoading } = useExpenses();
+  const { summary, isLoading: summaryLoading } = useDashboardSummary();
   const { notifications, addNotification, getUnreadCount, hasHydrated } = useNotificationStore();
 
-  const currentMonth = new Date().toISOString().slice(0, 7);
-
-  const monthTotal = useMemo(() => {
-    return expenses
-      .filter((expense) => {
-        const rawDate = typeof expense.date === 'string' ? expense.date : expense.date.toISOString();
-        return rawDate.startsWith(currentMonth) && isExpenseTransaction(expense);
-      })
-      .reduce((sum, expense) => sum + expense.amount, 0);
-  }, [expenses, currentMonth]);
-
-  const currentBudget = useMemo(
-    () => budgets.find((budget) => budget.month === currentMonth),
-    [budgets, currentMonth]
-  );
-
   useEffect(() => {
-    if (!hasHydrated || !currentBudget || currentBudget.total_amount <= 0) return;
+    if (!hasHydrated) return;
 
-    const usagePercent = (monthTotal / currentBudget.total_amount) * 100;
+    const budget = summary?.budgetSummary;
+    if (!budget || budget.budgetLimit <= 0) return;
 
-    BUDGET_ALERT_THRESHOLDS.forEach((threshold) => {
-      if (usagePercent < threshold) return;
+    const usagePercent = (budget.spent / budget.budgetLimit) * 100;
+    const month = budget.month;
+
+    for (const threshold of BUDGET_ALERT_THRESHOLDS) {
+      if (usagePercent < threshold) {
+        continue;
+      }
 
       addNotification({
         type: 'budget_alert',
         title: threshold === 100 ? 'Budget exceeded' : `Budget ${threshold}% used`,
         message:
           threshold === 100
-            ? `You have exceeded your ${currentMonth} budget.`
-            : `You have used ${Math.floor(usagePercent)}% of your ${currentMonth} budget.`,
-        eventKey: `budget-alert:${currentMonth}:${threshold}`,
+            ? `You have exceeded your ${month} budget.`
+            : `You have used ${Math.floor(usagePercent)}% of your ${month} budget.`,
+        eventKey: `budget-alert:${month}:${threshold}`,
         route: '/budgets',
       });
-    });
-  }, [addNotification, currentBudget, currentMonth, hasHydrated, monthTotal]);
+    }
+  }, [addNotification, hasHydrated, summary?.budgetSummary]);
 
   return {
     notifications,
     unreadCount: getUnreadCount(),
-    isLoading: budgetsLoading || expensesLoading || !hasHydrated,
+    isLoading: summaryLoading || !hasHydrated,
   };
 }

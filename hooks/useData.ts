@@ -18,7 +18,7 @@ import {
   type SyncRecurringItem,
 } from '@/lib/api/sync.api';
 import { getSyncPushFailureMessage } from '@/lib/sync/pushResult';
-import { Expense, Category, CategoryType, Budget, RecurringExpense } from '@/types';
+import { Expense, Category, Budget, RecurringExpense } from '@/types';
 import { Goal, GoalTransaction } from '@/types/goals';
 import { useAuth } from '@/contexts/AuthContext';
 import { DEFAULT_TRANSACTION_TYPE, getCategoryType, getTransactionType } from '@/lib/transactions';
@@ -39,6 +39,10 @@ type BudgetRecord = Budget & {
 type RecurringWriteInput = RecurringExpense & {
   retry_count?: number | null;
   last_error?: string | null;
+};
+
+type BudgetWithCategoryBudgets = {
+  category_budgets?: SyncCategoryBudgetItem[];
 };
 
 const normalizeCategory = (category: CategoryWriteInput): Category => {
@@ -89,7 +93,7 @@ const fetcher = async (table: string) => {
       .filter((category: Category) => !category.is_deleted);
 
     const uniqueCategories = Array.from(
-      new Map(normalizedCategories.map((category: { id: any; }) => [category.id, category])).values()
+      new Map(normalizedCategories.map((category: Category) => [category.id, category])).values()
     );
 
     return uniqueCategories;
@@ -154,6 +158,14 @@ const revalidateFinanceSummary = (mutate: ReturnType<typeof useSWRConfig>['mutat
   );
 };
 
+const DASHBOARD_SWR_OPTIONS = {
+  dedupingInterval: 60_000,
+  revalidateIfStale: false,
+  revalidateOnFocus: false,
+  revalidateOnReconnect: false,
+  keepPreviousData: true,
+} as const;
+
 const fetchSingle = async <T>(table: string, id: string): Promise<T> => {
   let url = '';
   switch (table) {
@@ -180,7 +192,7 @@ const fetchSingle = async <T>(table: string, id: string): Promise<T> => {
 };
 
 const fetchCategoryBudgetsByBudgetId = async (budgetId: string): Promise<SyncCategoryBudgetItem[]> => {
-  const budget = await fetchSingle<any>('budgets', budgetId);
+  const budget = await fetchSingle<BudgetWithCategoryBudgets>('budgets', budgetId);
   return budget.category_budgets || [];
 };
 
@@ -192,8 +204,9 @@ const fetchBudgetByMonth = async (month: string): Promise<Budget | null> => {
   try {
     const response = await aiHttpClient.get(`/api/budgets/month/${month}`);
     return response.data as Budget;
-  } catch (error: any) {
-    if (error?.status === 404 || error?.response?.status === 404) {
+  } catch (error: unknown) {
+    const httpError = error as { status?: number; response?: { status?: number } } | undefined;
+    if (httpError?.status === 404 || httpError?.response?.status === 404) {
       return null;
     }
     throw error;
@@ -397,7 +410,7 @@ export function useDashboardSummary() {
   const { data, error, isLoading, mutate } = useSWR<DashboardSummaryResponse>(
     user ? 'dashboard-summary' : null,
     () => dashboardApi.getSummary(),
-    { dedupingInterval: 30_000 },
+    DASHBOARD_SWR_OPTIONS,
   );
 
   return {
@@ -406,6 +419,10 @@ export function useDashboardSummary() {
     isError: error,
     mutate,
   };
+}
+
+export function useDashboardCoreSummary() {
+  return useDashboardSummary();
 }
 
 export function useBudgetSummary(month: string) {
@@ -424,11 +441,15 @@ export function useBudgetSummary(month: string) {
   };
 }
 
-export function useCategories() {
+export function useCategories(enabled = true) {
   const { user } = useAuth();
-  const { data, error, isLoading, mutate } = useSWR<Category[]>(user ? 'categories' : null, fetcher, {
+  const { data, error, isLoading, mutate } = useSWR<Category[]>(
+    user && enabled ? 'categories' : null,
+    fetcher,
+    {
     dedupingInterval: 30_000,
-  });
+    },
+  );
 
   return {
     categories: data || [],
@@ -554,6 +575,7 @@ export function useAddCategory() {
     };
     await pushSyncChange({ categories: [toSyncCategoryItem(category)] });
     await mutate('categories');
+    revalidateFinanceSummary(mutate);
     return normalizeCategory(category);
   });
 }
@@ -569,6 +591,7 @@ export function useEditCategory() {
     };
     await pushSyncChange({ categories: [toSyncCategoryItem(updatedCategory)] });
     await mutate('categories');
+    revalidateFinanceSummary(mutate);
     return normalizeCategory(updatedCategory);
   });
 }
@@ -589,6 +612,7 @@ export function useDeleteCategory() {
       ],
     });
     await mutate('categories');
+    revalidateFinanceSummary(mutate);
     return true;
   });
 }

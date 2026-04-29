@@ -12,41 +12,18 @@ import { PageSkeleton } from "@/components/state/PageSkeleton";
 import { Button } from "@/components/ui/button";
 import { useAiNudges } from "@/hooks/useAi";
 import {
-  useBudgetSummary,
-  useCategories,
-  useDashboardSummary,
-  useExpenses,
+  useDashboardCoreSummary,
 } from "@/hooks/useData";
 import { getCurrencySymbol } from "@/lib/currencies";
-import { toYearMonthKey } from "@/lib/dates";
-import { sortExpensesByTransactionDateTime } from "@/lib/expenseSort";
+import { Category, Expense } from "@/types";
 
 export default function DashboardPage() {
   const {
-    expenses,
-    isLoading: expensesLoading,
-    isError: expensesError,
-    mutate: mutateExpenses,
-  } = useExpenses();
-  const currentMonth = toYearMonthKey(new Date());
-  const {
     summary,
-    isLoading: summaryLoading,
-    isError: summaryError,
+    isLoading,
+    isError,
     mutate: mutateSummary,
-  } = useDashboardSummary();
-  const {
-    summary: budgetSummary,
-    isLoading: budgetSummaryLoading,
-    isError: budgetSummaryError,
-    mutate: mutateBudgetSummary,
-  } = useBudgetSummary(currentMonth);
-  const {
-    categories,
-    isLoading: categoriesLoading,
-    isError: categoriesError,
-    mutate: mutateCategories,
-  } = useCategories();
+  } = useDashboardCoreSummary();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const {
     data: nudgesData,
@@ -55,36 +32,49 @@ export default function DashboardPage() {
     mutate: mutateNudges,
   } = useAiNudges();
 
-  const isLoading =
-    expensesLoading ||
-    categoriesLoading ||
-    summaryLoading ||
-    budgetSummaryLoading;
-  const hasDataError = Boolean(
-    expensesError || categoriesError || summaryError || budgetSummaryError,
-  );
+  const hasDataError = Boolean(isError);
   const totalIncome = summary?.totalIncome ?? 0;
   const totalExpense = summary?.totalExpense ?? 0;
   const totalBalance = summary?.balance ?? 0;
   const transactionCount = summary?.transactionCount ?? 0;
-  const currentMonthExpense = budgetSummary?.spent ?? 0;
-  const totalBudget = budgetSummary?.budgetLimit ?? 0;
-  const remainingBudget = budgetSummary?.remaining ?? 0;
+  const currentMonthExpense =
+    summary?.budgetSummary?.spent ?? summary?.monthlyExpense ?? 0;
+  const totalBudget = summary?.budgetSummary?.budgetLimit ?? 0;
+  const remainingBudget =
+    summary?.budgetSummary?.remaining ?? totalBudget - currentMonthExpense;
   const hasCurrentBudget = totalBudget > 0;
 
   const recentTransactions = useMemo(() => {
-    return sortExpensesByTransactionDateTime(
-      expenses.filter((expense) => !expense.is_deleted),
-    ).slice(0, 5);
-  }, [expenses]);
+    const recentItems = summary?.recentTransactions ?? [];
+    return recentItems
+      .filter((item) => !item.isDeleted)
+      .map<Expense>((item) => ({
+        id: item.id,
+        amount: item.amount,
+        transaction_type:
+          item.transactionType?.toLowerCase() === "income" ? "income" : "expense",
+        category_id: item.categoryId ?? undefined,
+        date: item.date ?? new Date().toISOString(),
+        notes: item.noteSummary ?? item.note ?? undefined,
+        note: item.note ?? undefined,
+        merchant: item.merchant ?? undefined,
+        currency: item.currency ?? "USD",
+        is_deleted: item.isDeleted,
+      }));
+  }, [summary?.recentTransactions]);
+
+  const categories = useMemo(() => {
+    const recentCategories = summary?.recentCategories ?? [];
+    return recentCategories.map<Category>((category) => ({
+      id: category.id,
+      name: category.name,
+      icon: "tag",
+      color: "#64748b",
+    }));
+  }, [summary?.recentCategories]);
 
   const handleRetryDashboard = () => {
-    void Promise.all([
-      mutateExpenses(),
-      mutateCategories(),
-      mutateSummary(),
-      mutateBudgetSummary(),
-    ]);
+    void mutateSummary();
   };
 
   const handleRetryNudges = () => {
