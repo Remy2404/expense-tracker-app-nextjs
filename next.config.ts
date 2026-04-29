@@ -1,46 +1,46 @@
 import type { NextConfig } from 'next';
 
 const apiProxyTarget = process.env.API_PROXY_TARGET?.trim().replace(/\/+$/, '');
-const isProduction = process.env.NODE_ENV === 'production';
 
-const toOrigin = (value?: string): string | null => {
-  if (!value) {
-    return null;
-  }
+const isDev = process.env.NODE_ENV !== 'production';
 
-  try {
-    return new URL(value).origin;
-  } catch {
-    return null;
-  }
-};
-
-const cspConnectSrcDynamic = [
-  toOrigin(process.env.NEXT_PUBLIC_API_BASE_URL),
-  ...(process.env.NEXT_PUBLIC_CSP_CONNECT_SRC_EXTRA ?? '')
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter(Boolean),
-]
-  .filter((entry): entry is string => Boolean(entry))
-  .join(' ');
-
-const contentSecurityPolicy = `
-  default-src 'self';
-  script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://www.gstatic.com https://apis.google.com https://www.googleapis.com;
-  style-src 'self' 'unsafe-inline' https://accounts.google.com https://fonts.googleapis.com;
-  img-src 'self' data: blob: https:;
-  font-src 'self' data: https://fonts.gstatic.com;
-  connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://firestore.googleapis.com https://*.googleapis.com https://*.firebaseio.com https://*.cloudfunctions.net wss://*.firebaseio.com ${cspConnectSrcDynamic};
-  frame-src 'self' https://accounts.google.com https://*.google.com https://*.firebaseapp.com https://*.gstatic.com;
-  object-src 'none';
-  base-uri 'self';
-  form-action 'self';
-  frame-ancestors 'none';
-  ${isProduction ? 'upgrade-insecure-requests;' : ''}
-`
-  .replace(/\s{2,}/g, ' ')
-  .trim();
+const csp = [
+  "default-src 'self'",
+  [
+    "script-src",
+    "'self'",
+    "'unsafe-inline'",
+    isDev ? "'unsafe-eval'" : '',
+    'https://apis.google.com',
+    'https://accounts.google.com',
+    'https://www.gstatic.com',
+  ]
+    .filter(Boolean)
+    .join(' '),
+  [
+    'connect-src',
+    "'self'",
+    'https://accounts.google.com',
+    'https://www.googleapis.com',
+    'https://identitytoolkit.googleapis.com',
+    'https://securetoken.googleapis.com',
+    'https://firebase.googleapis.com',
+    'https://firebaseinstallations.googleapis.com',
+    'https://firestore.googleapis.com',
+    apiProxyTarget ?? '',
+  ]
+    .filter(Boolean)
+    .join(' '),
+  "img-src 'self' data: blob: https://*.googleusercontent.com https://www.gstatic.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com",
+  "frame-src 'self' https://accounts.google.com",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "upgrade-insecure-requests",
+].join('; ');
 
 const nextConfig: NextConfig = {
   async headers() {
@@ -50,28 +50,25 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: 'Content-Security-Policy',
-            value: contentSecurityPolicy,
+            value: csp,
+          },
+          {
+            key: 'Cross-Origin-Opener-Policy',
+            value: 'same-origin-allow-popups',
           },
           {
             key: 'X-Content-Type-Options',
             value: 'nosniff',
           },
           {
-            key: 'X-Frame-Options',
-            value: 'DENY',
-          },
-          {
             key: 'Referrer-Policy',
             value: 'strict-origin-when-cross-origin',
-          },
-          {
-            key: 'Cross-Origin-Opener-Policy',
-            value: 'same-origin-allow-popups',
           },
         ],
       },
     ];
   },
+
   async rewrites() {
     if (!apiProxyTarget) {
       return [];
