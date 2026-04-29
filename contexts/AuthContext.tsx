@@ -145,19 +145,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [bootstrapFromSessionCookie]);
 
   useEffect(() => {
+    let cancelled = false;
+
     const unsubscribe = onIdTokenChanged(auth, async (firebaseUser) => {
-      if (!firebaseUser) {
+      if (cancelled || !firebaseUser) {
         return;
       }
 
       try {
         await syncBackendSession(firebaseUser);
       } catch (error) {
-        console.error('Failed to refresh backend auth cookie.', error);
+        if (!cancelled) {
+          const aiErr = error as { message?: string; status?: number };
+          if (aiErr.status) {
+            console.error(
+              `Failed to refresh backend auth cookie. [${aiErr.status}] ${aiErr.message}`
+            );
+          } else {
+            console.warn(
+              'Backend session sync skipped — backend may be unavailable.',
+              aiErr.message
+            );
+          }
+        }
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, [syncBackendSession]);
 
   const signInWithEmail = async (

@@ -41,6 +41,13 @@ import {
   isExpenseTransaction,
   isIncomeTransaction,
 } from '@/lib/transactions';
+import {
+  sanitizeString,
+  sanitizeNumericString,
+  sanitizeDateString,
+  sanitizeCategoryId,
+  sanitizeTransactionType,
+} from '@/lib/security';
 
 type ExportRange = 'all' | 'current-month';
 type TransactionTypeFilter = 'all' | TransactionType;
@@ -74,13 +81,13 @@ const EMPTY_FILTERS: ExpenseFilters = {
 const RECEIPT_THUMBNAIL_LIMIT = 3;
 
 const getFiltersFromSearchParams = (searchParams: URLSearchParams | ReadonlyURLSearchParams): ExpenseFilters => ({
-  transactionType: (searchParams.get('type') as TransactionTypeFilter) || 'all',
-  query: searchParams.get('q') || '',
-  categoryId: searchParams.get('categoryId') || '',
-  dateFrom: searchParams.get('dateFrom') || '',
-  dateTo: searchParams.get('dateTo') || '',
-  minAmount: searchParams.get('minAmount') || '',
-  maxAmount: searchParams.get('maxAmount') || '',
+  transactionType: sanitizeTransactionType(searchParams.get('type') || 'all'),
+  query: sanitizeString(searchParams.get('q') || '', 200),
+  categoryId: sanitizeCategoryId(searchParams.get('categoryId') || ''),
+  dateFrom: sanitizeDateString(searchParams.get('dateFrom') || ''),
+  dateTo: sanitizeDateString(searchParams.get('dateTo') || ''),
+  minAmount: sanitizeNumericString(searchParams.get('minAmount') || '', 0, 999999999),
+  maxAmount: sanitizeNumericString(searchParams.get('maxAmount') || '', 0, 999999999),
 });
 
 const filtersEqual = (a: ExpenseFilters, b: ExpenseFilters): boolean =>

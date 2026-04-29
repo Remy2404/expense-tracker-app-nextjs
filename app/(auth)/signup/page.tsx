@@ -29,6 +29,39 @@ export default function SignupPage() {
     );
   }
 
+  /**
+   * Validates password strength
+   * @param password - Password to validate
+   * @returns Error message if invalid, null if valid
+   */
+  const validatePasswordStrength = (password: string): string | null => {
+    if (password.length < 12) {
+      return 'Password must be at least 12 characters long.';
+    }
+
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
+    const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+
+    const complexityCount = [hasUpperCase, hasLowerCase, hasNumber, hasSpecialChar].filter(Boolean).length;
+
+    if (complexityCount < 3) {
+      return 'Password must contain at least 3 of: uppercase, lowercase, numbers, special characters.';
+    }
+
+    // Check for common patterns
+    if (/(.)\1{2,}/.test(password)) {
+      return 'Password cannot contain repeated characters (e.g., "aaa", "111").';
+    }
+
+    if (/^[0-9]+$/.test(password) || /^[a-zA-Z]+$/.test(password)) {
+      return 'Password cannot be only numbers or only letters.';
+    }
+
+    return null;
+  };
+
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -41,8 +74,9 @@ export default function SignupPage() {
       return setError('Passwords do not match');
     }
 
-    if (password.length < 6) {
-      return setError('Password must be at least 6 characters.');
+    const passwordError = validatePasswordStrength(password);
+    if (passwordError) {
+      return setError(passwordError);
     }
 
     setLoading(true);
@@ -113,10 +147,13 @@ export default function SignupPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              minLength={6}
+              minLength={12}
               className="w-full h-10 px-3 bg-transparent border border-foreground/20 rounded-md focus:outline-none focus:ring-2 focus:ring-foreground/20"
-              placeholder="Min 6 characters"
+              placeholder="Min 12 characters with complexity"
             />
+            <p className="text-xs text-muted-foreground">
+              Must be 12+ characters with at least 3 of: uppercase, lowercase, numbers, special characters
+            </p>
           </div>
 
           <div className="space-y-2">
@@ -126,7 +163,7 @@ export default function SignupPage() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
-              minLength={6}
+              minLength={12}
               className="w-full h-10 px-3 bg-transparent border border-foreground/20 rounded-md focus:outline-none focus:ring-2 focus:ring-foreground/20"
               placeholder="Confirm your password"
             />
