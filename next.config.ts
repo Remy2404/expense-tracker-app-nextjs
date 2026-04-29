@@ -1,13 +1,24 @@
 import type { NextConfig } from 'next';
 
 const apiProxyTarget = process.env.API_PROXY_TARGET?.trim().replace(/\/+$/, '');
-
 const isDev = process.env.NODE_ENV !== 'production';
+
+const firebaseProjectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID?.trim();
+const firebaseAuthDomain = process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN?.trim();
+
+const extraConnectSources = [
+  apiProxyTarget,
+  firebaseAuthDomain ? `https://${firebaseAuthDomain}` : undefined,
+].filter(Boolean);
 
 const csp = [
   "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
   [
-    "script-src",
+    'script-src',
     "'self'",
     "'unsafe-inline'",
     isDev ? "'unsafe-eval'" : '',
@@ -27,18 +38,36 @@ const csp = [
     'https://firebase.googleapis.com',
     'https://firebaseinstallations.googleapis.com',
     'https://firestore.googleapis.com',
-    apiProxyTarget ?? '',
+    'https://*.googleapis.com',
+    'https://*.firebaseio.com',
+    'https://*.firebaseapp.com',
+    ...extraConnectSources,
   ]
     .filter(Boolean)
     .join(' '),
-  "img-src 'self' data: blob: https://*.googleusercontent.com https://www.gstatic.com",
+  [
+    'frame-src',
+    "'self'",
+    'https://accounts.google.com',
+    'https://*.firebaseapp.com',
+    firebaseProjectId ? `https://${firebaseProjectId}.firebaseapp.com` : '',
+    firebaseAuthDomain ? `https://${firebaseAuthDomain}` : '',
+  ]
+    .filter(Boolean)
+    .join(' '),
+  [
+    'img-src',
+    "'self'",
+    'data:',
+    'blob:',
+    'https://*.googleusercontent.com',
+    'https://www.gstatic.com',
+    'https://lh3.googleusercontent.com',
+  ].join(' '),
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com",
-  "frame-src 'self' https://accounts.google.com",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
+  "worker-src 'self' blob:",
+  "manifest-src 'self'",
   "upgrade-insecure-requests",
 ].join('; ');
 
