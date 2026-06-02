@@ -5,7 +5,7 @@ import { Loader2, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { getCurrencySymbol } from '@/lib/currencies';
-import { getSignedTransactionAmount, getTransactionType } from '@/lib/transactions';
+import { getSignedTransactionAmount, getTransactionDisplayTitle, getTransactionType } from '@/lib/transactions';
 import { Expense } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -24,7 +24,7 @@ export function DeleteExpenseDialog({
   onConfirm,
   onOpenChange,
 }: DeleteExpenseDialogProps) {
-  const note = expense?.notes || expense?.note || 'Transaction';
+  const note = expense ? getTransactionDisplayTitle(expense) : 'Unnamed expense';
   const amount = expense
     ? `${getSignedTransactionAmount(expense) >= 0 ? '+' : '-'}${getCurrencySymbol(
         expense.currency || 'USD'

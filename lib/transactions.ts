@@ -7,6 +7,9 @@ type TransactionLike = Pick<Expense, 'transaction_type'> & {
   type?: string | null;
 };
 
+type TransactionTitleLike = TransactionLike &
+  Pick<Expense, 'notes' | 'note' | 'merchant'>;
+
 const normalizeTransactionTypeValue = (value: unknown): TransactionType | null => {
   if (typeof value !== 'string') return null;
   return value.toLowerCase() === 'income' ? 'income' : 'expense';
@@ -45,4 +48,38 @@ export const getSignedTransactionAmount = (
   transaction: Pick<Expense, 'amount' | 'transaction_type'> & { type?: string | null }
 ): number => {
   return isIncomeTransaction(transaction) ? transaction.amount : -transaction.amount;
+};
+
+const getMeaningfulTransactionText = (...values: Array<string | null | undefined>): string | null => {
+  for (const value of values) {
+    const normalizedValue = value?.trim();
+    if (
+      normalizedValue &&
+      normalizedValue.toLowerCase() !== 'transaction' &&
+      normalizedValue.toLowerCase() !== 'ai transaction'
+    ) {
+      return normalizedValue;
+    }
+  }
+  return null;
+};
+
+export const getTransactionDisplayTitle = (
+  transaction: TransactionTitleLike,
+  categoryName?: string | null
+): string => {
+  const readableText = getMeaningfulTransactionText(
+    transaction.notes,
+    transaction.note,
+    transaction.merchant
+  );
+  if (readableText) return readableText;
+
+  const readableCategory = getMeaningfulTransactionText(categoryName);
+  const transactionType = getTransactionType(transaction);
+  if (readableCategory && readableCategory.toLowerCase() !== 'uncategorized') {
+    return `${readableCategory} ${transactionType}`;
+  }
+
+  return `Unnamed ${transactionType}`;
 };

@@ -172,4 +172,28 @@ describe("DashboardPage", () => {
     expect(items.length).toBe(1);
     expect(within(items[0]).getByText("-$50.00")).toBeInTheDocument();
   });
+
+  it("replaces a generic transaction note with a readable category fallback", () => {
+    mockUseDashboardCoreSummary.mockReturnValue({
+      summary: {
+        ...defaultSummary,
+        recentTransactions: [
+          {
+            ...defaultSummary.recentTransactions[0],
+            note: "Transaction",
+            noteSummary: "AI transaction",
+            merchant: null,
+          },
+        ],
+      },
+      isLoading: false,
+      isError: false,
+      mutate: jest.fn(),
+    });
+
+    render(<DashboardPage />);
+
+    expect(screen.getByText("Food expense")).toBeInTheDocument();
+    expect(screen.queryByText("Transaction")).not.toBeInTheDocument();
+  });
 });

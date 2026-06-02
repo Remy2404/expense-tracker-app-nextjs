@@ -6,7 +6,7 @@ import { getCurrencySymbol } from "@/lib/currencies";
 import { toSafeDate } from "@/lib/dates";
 import { sortExpensesByTransactionDateTime } from "@/lib/expenseSort";
 import { Category, Expense } from "@/types";
-import { getSignedTransactionAmount } from "@/lib/transactions";
+import { getSignedTransactionAmount, getTransactionDisplayTitle } from "@/lib/transactions";
 
 type RecentTransactionsCardProps = {
   recentTransactions: Expense[];
@@ -49,12 +49,7 @@ export function RecentTransactionsCard({
                 ? (categoryNameById.get(expense.category_id) ?? "Uncategorized")
                 : undefined;
               const subtitleCategory = categoryName ?? "Uncategorized";
-              const title =
-                expense.notes ||
-                expense.note ||
-                expense.merchant ||
-                categoryName ||
-                "Transaction";
+              const title = getTransactionDisplayTitle(expense, categoryName);
 
               return (
                 <li

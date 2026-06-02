@@ -37,6 +37,7 @@ import { Expense, TransactionType } from '@/types';
 import {
   getCategoryType,
   getSignedTransactionAmount,
+  getTransactionDisplayTitle,
   getTransactionType,
   isExpenseTransaction,
   isIncomeTransaction,
@@ -589,7 +590,8 @@ export default function ExpensesPage() {
                   const receiptPaths = expense.receipt_paths ?? [];
                   const visibleReceipts = receiptPaths.slice(0, RECEIPT_THUMBNAIL_LIMIT);
                   const hiddenReceiptCount = Math.max(0, receiptPaths.length - RECEIPT_THUMBNAIL_LIMIT);
-                  const expenseLabel = expense.notes || expense.note || 'Transaction';
+                  const categoryName = getCategoryName(expense.category_id);
+                  const expenseLabel = getTransactionDisplayTitle(expense, categoryName);
 
                   return (
                     <div
@@ -600,7 +602,7 @@ export default function ExpensesPage() {
                       <div className="min-w-0 space-y-1">
                         <p className="truncate font-medium group-hover:text-primary transition-colors">{expenseLabel}</p>
                         <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                          <Badge variant="outline" className="transition-transform group-hover:scale-105">{getCategoryName(expense.category_id)}</Badge>
+                          <Badge variant="outline" className="transition-transform group-hover:scale-105">{categoryName}</Badge>
                           <Badge variant={getTransactionType(expense) === 'income' ? 'default' : 'secondary'} className="transition-transform group-hover:scale-105">
                             {getTransactionType(expense) === 'income' ? 'Income' : 'Expense'}
                           </Badge>
