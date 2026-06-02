@@ -56,7 +56,9 @@ const getMeaningfulTransactionText = (...values: Array<string | null | undefined
     if (
       normalizedValue &&
       normalizedValue.toLowerCase() !== 'transaction' &&
-      normalizedValue.toLowerCase() !== 'ai transaction'
+      normalizedValue.toLowerCase() !== 'ai transaction' &&
+      normalizedValue.toLowerCase() !== 'null' &&
+      normalizedValue.toLowerCase() !== 'undefined'
     ) {
       return normalizedValue;
     }

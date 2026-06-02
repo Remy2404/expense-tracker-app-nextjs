@@ -14,7 +14,7 @@ const hasRelevantEntity = (entities: string[] | undefined, relevantEntities: str
   return relevantEntities.some((entity) => entitySet.has(entity));
 };
 
-const shouldRevalidateKey = (key: unknown, entities?: string[]) => {
+export const shouldRevalidateKey = (key: unknown, entities?: string[]) => {
   if (typeof key === 'string') {
     if (key === '/api/ai/nudges') {
       return hasRelevantEntity(entities, ['expenses', 'categories', 'budgets', 'goals', 'recurring']);
@@ -37,6 +37,9 @@ const shouldRevalidateKey = (key: unknown, entities?: string[]) => {
     if (key === 'recurring_expenses') {
       return hasRelevantEntity(entities, ['recurring']);
     }
+    if (key === 'bill-split-groups') {
+      return hasRelevantEntity(entities, ['bill_split']);
+    }
     return false;
   }
 
@@ -45,6 +48,12 @@ const shouldRevalidateKey = (key: unknown, entities?: string[]) => {
   }
   if (Array.isArray(key) && key[0] === 'budget-summary') {
     return hasRelevantEntity(entities, ['expenses', 'budgets']);
+  }
+  if (Array.isArray(key) && key[0] === 'goal_transactions') {
+    return hasRelevantEntity(entities, ['goals']);
+  }
+  if (Array.isArray(key) && key[0] === 'bill-split-groups') {
+    return hasRelevantEntity(entities, ['bill_split']);
   }
 
   return false;

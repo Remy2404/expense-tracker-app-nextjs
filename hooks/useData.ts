@@ -541,6 +541,9 @@ export function useGoals() {
   const { user } = useAuth();
   const { data, error, isLoading, mutate } = useSWR<Goal[]>(user ? 'savings_goals' : null, fetcher, {
     dedupingInterval: 30_000,
+    refreshInterval: 15_000,
+    revalidateOnFocus: true,
+    revalidateOnReconnect: true,
   });
   return {
     goals: data || [],
@@ -727,7 +730,15 @@ export function useGoalTransactions(goalId?: string) {
     return fetchGoalTransactionsByGoalId(goalId);
   };
 
-  const { data, error, isLoading, mutate } = useSWR(goalId ? ['goal_transactions', goalId] : null, fetcherByGoal);
+  const { data, error, isLoading, mutate } = useSWR(
+    goalId ? ['goal_transactions', goalId] : null,
+    fetcherByGoal,
+    {
+      refreshInterval: 15_000,
+      revalidateOnFocus: true,
+      revalidateOnReconnect: true,
+    }
+  );
   return {
     transactions: data || [],
     isLoading,

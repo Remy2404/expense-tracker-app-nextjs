@@ -7,6 +7,12 @@ import { aiHttpClient } from '@/lib/api/http';
 import { normalizeGroupSummary } from '@/lib/billSplit';
 
 const KEY_GROUPS = 'bill-split-groups';
+const BILL_SPLIT_REFRESH_INTERVAL_MS = 15_000;
+const billSplitSWRConfig = {
+  refreshInterval: BILL_SPLIT_REFRESH_INTERVAL_MS,
+  revalidateOnFocus: true,
+  revalidateOnReconnect: true,
+};
 
 export function useBillSplitGroups() {
   const { user } = useAuth();
@@ -17,7 +23,11 @@ export function useBillSplitGroups() {
     return Array.isArray(response.data) ? response.data.map(normalizeGroupSummary) : [];
   };
 
-  const { data, error, isLoading, mutate } = useSWR(user?.uid ? KEY_GROUPS : null, fetcher);
+  const { data, error, isLoading, mutate } = useSWR(
+    user?.uid ? KEY_GROUPS : null,
+    fetcher,
+    billSplitSWRConfig
+  );
 
   return {
     groups: data ?? [],
@@ -34,7 +44,11 @@ export function useBillSplitGroupDetails(groupId?: string) {
     return response.data;
   };
 
-  const { data, error, isLoading, mutate } = useSWR(groupId ? [KEY_GROUPS, groupId] : null, fetcher);
+  const { data, error, isLoading, mutate } = useSWR(
+    groupId ? [KEY_GROUPS, groupId] : null,
+    fetcher,
+    billSplitSWRConfig
+  );
 
   return {
     details: data,

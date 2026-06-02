@@ -43,4 +43,16 @@ describe('getTransactionDisplayTitle', () => {
       })
     ).toBe('Unnamed income');
   });
+
+  it('ignores serialized null notes and uses the category fallback', () => {
+    expect(
+      getTransactionDisplayTitle(
+        {
+          transaction_type: 'expense',
+          notes: 'Null',
+        },
+        'Uncategorized'
+      )
+    ).toBe('Unnamed expense');
+  });
 });
